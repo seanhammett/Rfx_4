@@ -131,6 +131,9 @@ const char* OTA_UPLOAD_HTML = R"rawliteral(
     <div class="container">
         <h1>RFx4 OTA Update</h1>
         <p class="subtitle">Wirelessly update your device firmware</p>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="/" style="color: #667eea; text-decoration: none; font-size: 14px;">← Back to Dashboard</a>
+        </div>
         
         <div class="warning">
             <strong>[WARNING] Important:</strong> Do not disconnect power or WiFi during the update process. The device will automatically reboot when complete.

@@ -102,14 +102,54 @@ float commanded_velocity = 0.0;  // Track commanded velocity for display
 
 // Motor communication state
 bool motorResponseReceived = false;  // Track if we've ever received a valid response
+float lastReportedTorque = 0.0;      // Track torque to detect sudden loss
+unsigned long lastTorqueLossTime = 0;  // Track last torque loss event
+uint8_t lastMotorFault = 0;          // Track last fault code to detect changes
+unsigned long lastFaultTime = 0;     // Timestamp of last fault
 
 // Respool mode: triple-click remote button to bypass zero line-length safety
 bool respool_mode = false;
 float motor_position_offset = 0.0;  // Offset applied when respool resets zero point
 
-// ===== Helper Functions =====
+// ===== Motor Fault Code Descriptions =====
+const char* getMotorFaultDescription(uint8_t fault) {
+  if (fault == 0) return "No Fault";
+  
+  // Moteus fault codes (from Moteus documentation)
+  static char buffer[128];
+  buffer[0] = '\0';
+  
+  // Build fault string from bit flags with safe concatenation
+  if (fault & 0x01) strncat(buffer, "OverVoltage|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x02) strncat(buffer, "Brownout|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x04) strncat(buffer, "OverCurrent|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x08) strncat(buffer, "FET_Temp|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x10) strncat(buffer, "Motor_Temp|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x20) strncat(buffer, "Encoder|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x40) strncat(buffer, "Comm|", sizeof(buffer)-strlen(buffer)-1);
+  if (fault & 0x80) strncat(buffer, "Unknown|", sizeof(buffer)-strlen(buffer)-1);
+  
+  // Remove trailing pipe
+  if (buffer[0] != '\0') {
+    size_t len = strlen(buffer);
+    if (buffer[len-1] == '|') buffer[len-1] = '\0';
+  }
+  
+  if (buffer[0] == '\0') snprintf(buffer, sizeof(buffer), "Unknown(0x%02X)", fault);
+  return buffer;
+}
 
-// Calculate line length from motor position (positive = extended)
+// ===== Motor Mode Descriptions =====
+const char* getMotorModeDescription(int mode) {
+  switch(mode) {
+    case 0: return "Stopped";
+    case 1: return "Position";
+    case 2: return "Velocity";
+    case 3: return "Fault";
+    case 4: return "PWM";
+    default: return "Unknown";
+  }
+}
 float calculateLineLength(float motor_position) {
   return -((motor_position - motor_position_offset) * PI * SPOOL_DIAMETER / 1000.0);
 }
@@ -300,7 +340,7 @@ void setup() {
   });
   
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048);
     bool remoteActive = isRemoteActive();
     
     if (motorResponseReceived) {
@@ -312,7 +352,9 @@ void setup() {
       doc["motor"]["torque"] = result.torque;
       doc["motor"]["tension"] = abs(result.torque) / SPOOL_RADIUS_M;
       doc["motor"]["mode"] = static_cast<int>(result.mode);
+      doc["motor"]["mode_name"] = getMotorModeDescription(static_cast<int>(result.mode));
       doc["motor"]["fault"] = result.fault;
+      doc["motor"]["fault_desc"] = getMotorFaultDescription(result.fault);
     } else {
       doc["motor"]["commanded_velocity"] = commanded_velocity;
       doc["motor"]["actual_velocity"] = 0;
@@ -320,7 +362,9 @@ void setup() {
       doc["motor"]["torque"] = 0;
       doc["motor"]["tension"] = 0;
       doc["motor"]["mode"] = 0;
+      doc["motor"]["mode_name"] = "Unknown";
       doc["motor"]["fault"] = 0;
+      doc["motor"]["fault_desc"] = "No Connection";
     }
     
     doc["kite_id"]    = KITE_ID;
@@ -575,23 +619,50 @@ void sendMotorCommand() {
   cmd.position = NaN;
   cmd.velocity = commanded_velocity;
   cmd.maximum_torque = MAX_TORQUE;
+  cmd.watchdog_timeout = 0.5;  // 500ms timeout — survives SPIFFS reads during page refresh
   
   Moteus::PositionMode::Format fmt;
   fmt.position = Moteus::kFloat;
   fmt.velocity = Moteus::kFloat;
   fmt.maximum_torque = Moteus::kFloat;
+  fmt.watchdog_timeout = Moteus::kFloat;
   
   bool gotResponse = moteus.SetPosition(cmd, &fmt);
   
   if (gotResponse) {
     motorResponseReceived = true;
     const auto& result = moteus.last_result().values;
-    if (result.fault != 0) {
-      Serial.printf("[WARNING] Motor fault detected: 0x%02X\n", result.fault);
-      Serial.println("Stopping and attempting to clear fault...");
-      moteus.SetStop();
-      delay(1000);
+    
+    // Detect fault changes
+    if (result.fault != lastMotorFault) {
+      lastMotorFault = result.fault;
+      lastFaultTime = millis();
+      if (result.fault != 0) {
+        Serial.printf("[ERROR] MOTOR FAULT DETECTED: 0x%02X (%s)\n", result.fault, getMotorFaultDescription(result.fault));
+        Serial.printf("  Mode: %s, Torque: %.3f Nm, Velocity: %.2f rev/s\n",
+                      getMotorModeDescription(static_cast<int>(result.mode)), result.torque, result.velocity);
+        if (result.fault & 0x02) {
+          Serial.println("  [POSSIBLE CAUSE] Brownout - Power supply may be sagging. Check USB power or motor supply voltage.");
+        }
+        if (result.fault & 0x10) {
+          Serial.println("  [POSSIBLE CAUSE] Motor overheating. Check thermal conditions.");
+        }
+        if (result.fault & 0x04) {
+          Serial.println("  [POSSIBLE CAUSE] Over-current. Check for motor jam or high load.");
+        }
+      }
     }
+    
+    // Detect torque loss: we commanded motion but got no torque
+    if (commanded_velocity != 0.0 && result.torque == 0.0 && lastReportedTorque != 0.0) {
+      if (millis() - lastTorqueLossTime > 1000) {
+        Serial.printf("[ALERT] TORQUE LOSS DETECTED: cmd_vel=%.2f rev/s, torque=0.0 Nm, mode=%s, fault=0x%02X\n",
+                      commanded_velocity, getMotorModeDescription(static_cast<int>(result.mode)), result.fault);
+        lastTorqueLossTime = millis();
+      }
+    }
+    lastReportedTorque = result.torque;
+    
   } else {
     static unsigned long lastWarning = 0;
     if (millis() - lastWarning > 1000) {
@@ -613,10 +684,16 @@ void printStatus() {
   float tension = abs(result.torque) / SPOOL_RADIUS_M;
   bool remoteActive = isRemoteActive();
   
+  // Highlight torque loss condition
+  const char* torque_status = "";
+  if (commanded_velocity != 0.0 && result.torque == 0.0) {
+    torque_status = " ⚠️TORQUE_LOSS";
+  }
+  
   char status_line[512];
   int pos = snprintf(status_line, sizeof(status_line),
-                    "Vel%+5.2f/%+5.2f | Tq%+.3f | Tn%.1fN | L%6.2fm | Joy:R%+4d%s",
-                    commanded_velocity, result.velocity, result.torque, tension, line_length,
+                    "Vel%+5.2f/%+5.2f | Tq%+.3f | Tn%.1fN%s | L%6.2fm | Joy:R%+4d%s",
+                    commanded_velocity, result.velocity, result.torque, tension, torque_status, line_length,
                     remoteControlMsg.motor_speed,
                     remoteActive ? "*" : "");
   
@@ -628,6 +705,10 @@ void printStatus() {
   }
   if (respool_mode) {
     pos += snprintf(status_line + pos, sizeof(status_line) - pos, " | RESPOOL");
+  }
+  
+  if (result.fault != 0) {
+    pos += snprintf(status_line + pos, sizeof(status_line) - pos, " | FAULT=0x%02X", result.fault);
   }
   
   snprintf(status_line + pos, sizeof(status_line) - pos,
@@ -652,7 +733,7 @@ void loop() {
       processJoystickInput(remoteControlMsg.motor_speed, "REMOTE");
     }
     
-    // Target seeking / autopilot or idle
+    // Target seeking / autopilot
     if (target_seeking_enabled && motorResponseReceived) {
       const auto& ap_result = moteus.last_result().values;
       float ap_line = calculateLineLength(ap_result.position);
@@ -661,12 +742,11 @@ void loop() {
       commanded_velocity = autopilot.update(ap_line, ap_torque, ap_dt);
       // Keep shared state in sync
       line_length_target = autopilot.getTargetLineLength();
-    } else {
-      bool hasInput = (remoteActive && remoteControlMsg.command == 0);
-      if (!hasInput) {
-        commanded_velocity = 0.0;
-      }
+    } else if (remoteActive && remoteControlMsg.command == 0) {
+      // Remote input is active - process joystick (already done above, just continue with this velocity)
+      // Do nothing here - velocity already set by processJoystickInput()
     }
+    // Otherwise: keep last commanded_velocity (don't zero it out!)
     
     applySafetyLimits();
     sendMotorCommand();

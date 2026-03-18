@@ -9,7 +9,7 @@
         body { font-family: Arial; margin: 212x; background: #242424; }
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { color: #ffffff; }
-        .card { background: #242424; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
+        .card { background: #242424; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
         .card.light-mode { background: #ddd; }
         .card.light-mode h3 { color: #242424; }
         .card.light-mode .value { color: #242424; }
@@ -78,6 +78,14 @@
 
             <!-- Middle column: Autopilot + Recording -->
             <div style="flex: 0 0 180px; display: flex; flex-direction: column; gap: 20px;">
+                <div class="card" id="motorStatusCard">
+                    <h3>Motor Status</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                        <div><span style="color:#fff;">Mode:</span> <span id="motorMode" style="color:#5ab5ff;">—</span></div>
+                        <div><span style="color:#fff;">Fault:</span> <span id="motorFault" style="color:#5ab5ff;">No Fault</span></div>
+                        <div id="faultAlert" style="display:none; padding:6px; background:#8b0000; border-radius:3px; color:#ff9999; font-size:11px; margin-top:4px;"></div>
+                    </div>
+                </div>
                 <div class="card">
                     <h3>Autopilot</h3>
                     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
@@ -92,6 +100,11 @@
                     </div>
                 </div>
                 <div class="card">
+                    <h3>Prevailing Wind Est.</h3>
+                    <div class="value" id="windDirection" style="text-align: right;">0.0&deg;</div>
+                    <div class="label" id="windDirectionSamples">0 samples</div>
+                </div>
+                <div class="card">
                     <h3>Recording</h3>
                     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
                         <button id="recordBtn" onclick="toggleRecording()" style="padding:6px 12px;font-size:11px;">Start Recording</button>
@@ -101,6 +114,10 @@
                             <div id="sampleCount">0 samples</div>
                         </div>
                     </div>
+                </div>
+                <div class="card">
+                    <h3>Firmware</h3>
+                    <button onclick="window.open('/update-page', '_blank')" style="padding:6px 12px;font-size:11px;width:100%;">Update Firmware</button>
                 </div>
             </div>
 
@@ -118,6 +135,50 @@
     </div>
 
     <script>
+// ============================================================
+//  Wind Direction Rolling Average
+// ============================================================
+const WIND_DIRECTION_SAMPLES = 500;  // Many samples for slow update
+
+function normalizeAngle(angle) {
+    let normalized = angle % 360;
+    if (normalized < 0) normalized += 360;
+    return normalized;
+}
+
+function calculateCircularMean(angles) {
+    if (angles.length === 0) return 0;
+    let sin_sum = 0, cos_sum = 0;
+    for (let angle of angles) {
+        const rad = angle * Math.PI / 180;
+        sin_sum += Math.sin(rad);
+        cos_sum += Math.cos(rad);
+    }
+    const mean_rad = Math.atan2(sin_sum / angles.length, cos_sum / angles.length);
+    let mean_deg = mean_rad * 180 / Math.PI;
+    if (mean_deg < 0) mean_deg += 360;
+    return mean_deg;
+}
+
+function initWindDirectionBuffer(k) {
+    k.yawBuffer = [];
+    k.yawBufferIndex = 0;
+}
+
+function addYawSample(k, yawValue) {
+    if (k.yawBuffer.length < WIND_DIRECTION_SAMPLES) {
+        k.yawBuffer.push(yawValue);
+    } else {
+        k.yawBuffer[k.yawBufferIndex] = yawValue;
+        k.yawBufferIndex = (k.yawBufferIndex + 1) % WIND_DIRECTION_SAMPLES;
+    }
+}
+
+function getWindDirection(k) {
+    if (k.yawBuffer.length === 0) return 0;
+    return calculateCircularMean(k.yawBuffer);
+}
+
 // ============================================================
 //  Multi-Kite State
 // ============================================================
@@ -201,6 +262,11 @@ function downloadCSV() {
 // ============================================================
 //  Helpers
 // ============================================================
+function getMotorModeName(mode) {
+    const modes = ['Stopped', 'Position', 'Velocity', 'Fault', 'PWM'];
+    return modes[mode] || 'Unknown';
+}
+
 function formatValue(value, width, decimals, showSign) {
     const f = value.toFixed(decimals);
     const s = showSign ? (f.startsWith('-') ? f : ' ' + f) : f;
@@ -251,6 +317,12 @@ function refreshChart() {
     tensionChart.data.datasets[1].data = [...k.pitchData];
     tensionChart.data.datasets[2].data = [...k.lineData];
     tensionChart.options.scales.y.ticks.color = k.color;
+    
+    // Update y2 (line length) axis max dynamically
+    const maxLineLength = k.lineData.length > 0 ? Math.max(...k.lineData) : 0;
+    const padding = Math.max(maxLineLength * 0.15, 0.5);  // 15% padding or 0.5m minimum
+    tensionChart.options.scales.y2.max = Math.ceil((maxLineLength + padding) * 2) / 2;  // Round up to nearest 0.5
+    
     tensionChart.update('none');
 }
 
@@ -304,13 +376,14 @@ function createKite3D(k) {
     k.line3d        = mkLine([o,u], new THREE.LineBasicMaterial({color:c, linewidth:3}));
     k.projection3d  = mkLine([o,o.clone()], new THREE.LineBasicMaterial({color:0x888888, transparent:true, opacity:0.6}));
     k.velocityArr3d = mkLine([o,o.clone()], new THREE.LineBasicMaterial({color:0x00ff00, transparent:true, opacity:0.8}));
+    k.windDir3d     = mkLine([o,o.clone()], new THREE.LineBasicMaterial({color:0x888888, transparent:true, opacity:0.5, linewidth:2}));
     k.dot3d         = new THREE.Mesh(new THREE.SphereGeometry(0.03,16,16), new THREE.MeshBasicMaterial({color:0xff0000}));
     k.groundDot3d   = new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12), new THREE.MeshBasicMaterial({color:0x00ffff}));
-    [k.line3d, k.projection3d, k.velocityArr3d, k.dot3d, k.groundDot3d].forEach(o => scene.add(o));
+    [k.line3d, k.projection3d, k.velocityArr3d, k.windDir3d, k.dot3d, k.groundDot3d].forEach(o => scene.add(o));
 }
 
 function removeKite3D(k) {
-    [k.line3d, k.projection3d, k.velocityArr3d, k.dot3d, k.groundDot3d].forEach(o => {
+    [k.line3d, k.projection3d, k.velocityArr3d, k.windDir3d, k.dot3d, k.groundDot3d].forEach(o => {
         if(o){ scene.remove(o); if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }
     });
 }
@@ -337,6 +410,15 @@ function updateKite3D(k) {
     ap[0]=x; ap[1]=y; ap[2]=z;
     ap[3]=x+sc*pv*tx; ap[4]=y+sc*pv*ty; ap[5]=z+sc*pv*tz;
     k.velocityArr3d.geometry.attributes.position.needsUpdate=true;
+    
+    // Update wind direction line on ground plane
+    const windDir = getWindDirection(k);
+    const windRad = windDir * Math.PI / 180;
+    const windLen = 3.2;  // Length to extend beyond 30m circle
+    const wp = k.windDir3d.geometry.attributes.position.array;
+    wp[0]=0; wp[1]=0; wp[2]=0;
+    wp[3]=windLen*Math.sin(windRad); wp[4]=0; wp[5]=windLen*Math.cos(windRad);
+    k.windDir3d.geometry.attributes.position.needsUpdate=true;
 }
 
 // ============================================================
@@ -373,7 +455,32 @@ function updateCards(data) {
     document.getElementById('lineTension').textContent     = formatValue(data.motor.tension||0, 4, 1, false) + ' N';
     document.getElementById('lineLength').textContent      = formatValue(data.line_length||0, 6, 2, false) + ' m';
     document.getElementById('pitch').textContent           = formatValue(data.imu.pitch||0, 5, 1, true) + '\u00b0';
-    document.getElementById('yaw').textContent             = formatValue(data.imu.yaw||0, 6, 1, true) + '\u00b0';
+    document.getElementById('yaw').textContent             = formatValue(normalizeAngle(data.imu.yaw||0), 6, 1, false) + '\u00b0';
+    
+    // Update motor status
+    const motorMode = data.motor.mode_name || getMotorModeName(data.motor.mode||0);
+    const motorFault = data.motor.fault_desc || "No Fault";
+    document.getElementById('motorMode').textContent = motorMode;
+    document.getElementById('motorFault').textContent = motorFault;
+    
+    const faultAlert = document.getElementById('faultAlert');
+    const motorStatusCard = document.getElementById('motorStatusCard');
+    if (data.motor.fault && data.motor.fault !== 0) {
+        faultAlert.textContent = '⚠ ' + motorFault;
+        faultAlert.style.display = 'block';
+        motorStatusCard.style.borderColor = '#ff5555';
+    } else {
+        faultAlert.style.display = 'none';
+        motorStatusCard.style.borderColor = '#ddd';
+    }
+    
+    // Update wind direction for selected kite
+    if (selectedKiteId && kites[selectedKiteId]) {
+        const k = kites[selectedKiteId];
+        const windDir = getWindDirection(k);
+        document.getElementById('windDirection').textContent = formatValue(windDir, 6, 1, false) + '\u00b0';
+        document.getElementById('windDirectionSamples').textContent = k.yawBuffer.length + ' samples';
+    }
 
     if (data.autopilot) {
         const smt = data.autopilot.slack_min_torque / SPOOL_RADIUS_M;
@@ -408,6 +515,7 @@ async function pollKite(endpoint) {
         if (!kites[kiteId]) {
             kites[kiteId] = { endpoint, color, data:null, connected:false,
                               tensionData:[], pitchData:[], lineData:[] };
+            initWindDirectionBuffer(kites[kiteId]);
             createKite3D(kites[kiteId]);
             if (!selectedKiteId) selectedKiteId = kiteId;
             renderKiteBar();
@@ -424,6 +532,9 @@ async function pollKite(endpoint) {
             if (k.tensionData.length > MAX_DATA_POINTS) {
                 k.tensionData.shift(); k.pitchData.shift(); k.lineData.shift();
             }
+            
+            // Update wind direction rolling average
+            addYawSample(k, data.imu.yaw||0);
         }
 
         // CSV recording (all connected kites)
