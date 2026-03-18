@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RFx Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 212x; background: #242424; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffffff; }
+        .card { background: #242424; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
+        .card.light-mode { background: #ddd; }
+        .card.light-mode h3 { color: #242424; }
+        .card.light-mode .value { color: #242424; }
+        .card.light-mode .label { color: #555; }
+        .card h3 { margin-top: 0; color: #c7c7c7; font-size: 14px; }
+        .value { font-size: 20px; font-weight: bold; color: #5ab5ff; font-family: 'Courier New', monospace; min-width: 120px; display: inline-block; white-space: pre; }
+        .label { font-size: 11px; color: #999; margin-top: 3px; font-family: 'Courier New', monospace; }
+        .label-secondary { font-size: 10px; color: #777; margin-top: 2px; }
+        #threeContainer { width: 100%; height: 450px; border-radius: 8px; }
+        #tensionChart { width: 100% !important; height: 200px !important; }
+        button { padding: 12px 20px; font-size: 14px; border: 1px solid #666; border-radius: 4px;
+                 background: #333; color: #fff; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #555; border-color: #888; }
+        button:active { background: #222; }
+        .danger { background: #8b0000; }
+        .danger:hover { background: #a00000; }
+        /* Kite bar */
+        #kiteBar { display: flex; gap: 8px; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+        .kite-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+                     border-radius: 12px; background: #333; border: 2px solid #555; cursor: pointer;
+                     font-size: 12px; color: #ccc; user-select: none; }
+        .kite-chip.selected { border-color: currentColor; background: #3a3a3a; }
+        .kite-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .kite-chip .remove { margin-left: 4px; color: #888; font-size: 14px; cursor: pointer; }
+        .kite-chip .remove:hover { color: #ff5555; }
+        .kite-chip.disconnected { opacity: 0.45; }
+        #addKiteBtn { padding: 4px 10px; font-size: 12px; border-radius: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Kite manager bar (hidden in single-kite mode) -->
+        <div id="kiteBar" style="display:none;">
+            <div id="kiteList"></div>
+            <button id="addKiteBtn" onclick="promptAddKite()">+ Add Kite</button>
+        </div>
+
+        <div style="display: flex; gap: 20px;">
+            <!-- Left column: cards -->
+            <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 20px; width: 180px;">
+                <div class="card light-mode">
+                    <h3>Joystick Input</h3>
+                    <div class="value" id="joystickInput" style="text-align: right;">0</div>
+                </div>
+                <div class="card">
+                    <h3>Pitch</h3>
+                    <div class="value" id="pitch" style="text-align: right;">0.0&deg;</div>
+                </div>
+                <div class="card">
+                    <h3>Yaw</h3>
+                    <div class="value" id="yaw" style="text-align: right;">0.0&deg;</div>
+                </div>
+                <div class="card">
+                    <h3>Line Length</h3>
+                    <div class="value" id="lineLength" style="text-align: right;">0.00 m</div>
+                </div>
+                <div class="card">
+                    <h3>Line Speed</h3>
+                    <div class="value" id="lineSpeedReq" style="text-align: right;">0.00 m/s</div>
+                </div>
+                <div class="card">
+                    <h3>Line Tension</h3>
+                    <div class="value" id="lineTension" style="text-align: right;">0.0 N</div>
+                </div>
+            </div>
+
+            <!-- Middle column: Autopilot + Recording -->
+            <div style="flex: 0 0 180px; display: flex; flex-direction: column; gap: 20px;">
+                <div class="card">
+                    <h3>Autopilot</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                        <div><span style="color:#fff;">Enabled:</span> <span id="apEnabled" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Slack:</span> <span id="apSlack" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Target:</span> <span id="apTarget" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
+                        <div><span style="color:#fff;">Max Vel:</span> <span id="apMaxVel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s</span></div>
+                        <div><span style="color:#fff;">Accel:</span> <span id="apAccel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s&sup2;</span></div>
+                        <div><span style="color:#fff;">Decel:</span> <span id="apDecel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s&sup2;</span></div>
+                        <div><span style="color:#fff;">Deadband:</span> <span id="apDeadband" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
+                        <div><span style="color:#fff;">Slack Range:</span> <span id="apSlackRange" style="color:#5ab5ff;">&mdash;</span></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Recording</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+                        <button id="recordBtn" onclick="toggleRecording()" style="padding:6px 12px;font-size:11px;">Start Recording</button>
+                        <button onclick="downloadCSV()" style="padding:6px 12px;font-size:11px;">Download CSV</button>
+                        <div style="color:#5ab5ff;text-align:center;">
+                            <div id="recordStatus">Not Recording</div>
+                            <div id="sampleCount">0 samples</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column: 3D view and chart -->
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                <div class="card">
+                    <div id="threeContainer"></div>
+                </div>
+                <div class="card">
+                    <h3>Line Tension - Pitch Angle</h3>
+                    <canvas id="tensionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// ============================================================
+//  Multi-Kite State
+// ============================================================
+const kites = {};            // { kiteId: { endpoint, color, data, 3D objects, chart arrays } }
+let selectedKiteId = null;   // Kite whose data appears in the left/middle columns
+let kiteEndpoints = [];      // ['', 'http://172.20.10.11', ...]  '' = own host
+
+// Persist added endpoints across page reloads
+function loadKiteConfig() {
+    try { kiteEndpoints = JSON.parse(localStorage.getItem('rfx_kite_endpoints')); } catch(e) {}
+    if (!Array.isArray(kiteEndpoints) || kiteEndpoints.length === 0) kiteEndpoints = [''];
+}
+function saveKiteConfig() { localStorage.setItem('rfx_kite_endpoints', JSON.stringify(kiteEndpoints)); }
+
+function promptAddKite() {
+    const ip = prompt('Enter kite IP address (e.g. 172.20.10.11):');
+    if (!ip) return;
+    const clean = ip.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const endpoint = 'http://' + clean;
+    if (kiteEndpoints.includes(endpoint)) { alert('Already added'); return; }
+    kiteEndpoints.push(endpoint);
+    saveKiteConfig();
+}
+
+function removeKiteEndpoint(endpoint) {
+    if (endpoint === '') return;
+    kiteEndpoints = kiteEndpoints.filter(e => e !== endpoint);
+    saveKiteConfig();
+    for (const [id, k] of Object.entries(kites)) {
+        if (k.endpoint === endpoint) {
+            removeKite3D(k);
+            delete kites[id];
+            if (selectedKiteId === id) selectedKiteId = Object.keys(kites)[0] || null;
+        }
+    }
+    renderKiteBar();
+}
+
+function selectKite(id) { selectedKiteId = id; renderKiteBar(); }
+
+// ============================================================
+//  CSV Recording
+// ============================================================
+let isRecording = false;
+let csvData = [];
+let recordingStartTime = 0;
+
+function toggleRecording() {
+    isRecording = !isRecording;
+    const btn = document.getElementById('recordBtn');
+    const status = document.getElementById('recordStatus');
+    if (isRecording) {
+        csvData = []; recordingStartTime = Date.now();
+        btn.textContent = 'Stop Recording'; btn.style.background = '#8b0000';
+        status.textContent = 'Recording...'; status.style.color = '#ff5555';
+    } else {
+        btn.textContent = 'Start Recording'; btn.style.background = '#333';
+        status.textContent = 'Not Recording'; status.style.color = '#999';
+    }
+    updateSampleCount();
+}
+function updateSampleCount() { document.getElementById('sampleCount').textContent = csvData.length + ' samples'; }
+
+function buildCSV() {
+    let csv = 'Date,Time,Timestamp_ms,Kite_ID,Commanded_Vel_rps,Actual_Vel_rps,Torque_Nm,Tension_N,Line_Length_m,Target_Enabled,Target_Length_m,Remote_Joy,Remote_Active,Pitch_deg,Pitch_Vel_dps,Yaw_deg,Yaw_Vel_dps,Roll_deg\n';
+    csvData.forEach(row => { csv += row.join(',') + '\n'; });
+    return csv;
+}
+
+function downloadCSV() {
+    if (csvData.length === 0) { alert('No data recorded yet!'); return; }
+    const blob = new Blob([buildCSV()], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rfx_data_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// ============================================================
+//  Helpers
+// ============================================================
+function formatValue(value, width, decimals, showSign) {
+    const f = value.toFixed(decimals);
+    const s = showSign ? (f.startsWith('-') ? f : ' ' + f) : f;
+    return s.padStart(width, ' ');
+}
+const SPOOL_DIAMETER_MM = 68.0;
+const SPOOL_RADIUS_M = SPOOL_DIAMETER_MM / 2.0 / 1000.0;
+const METERS_PER_REV = Math.PI * SPOOL_DIAMETER_MM / 1000.0;
+
+// ============================================================
+//  Tension / Pitch / Line-length Chart
+// ============================================================
+let tensionChart = null;
+const MAX_DATA_POINTS = 3600;
+
+function initTensionChart() {
+    const ctx = document.getElementById('tensionChart').getContext('2d');
+    tensionChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [
+            { label:'Tension (N)',      data:[], borderColor:'#5ab5ff', backgroundColor:'rgba(90,181,255,0.1)',  borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y'  },
+            { label:'Pitch (\u00b0)',   data:[], borderColor:'#ffb85c', backgroundColor:'rgba(255,184,92,0.1)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y1' },
+            { label:'Line Length (m)',   data:[], borderColor:'#E5E5E5', backgroundColor:'rgba(229,229,229,0.05)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y2' }
+        ]},
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ display:false } },
+            scales:{
+                y: { type:'linear', display:true, position:'left',  beginAtZero:true, max:20, ticks:{color:'#5ab5ff'}, grid:{color:'#444'} },
+                y1:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:90, ticks:{color:'#ffb85c'}, grid:{drawOnChartArea:false} },
+                y2:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:2,  ticks:{color:'#E5E5E5'}, grid:{drawOnChartArea:false}, offset:true },
+                x: { ticks:{color:'#999'}, grid:{color:'#444'} }
+            }
+        }
+    });
+}
+
+function refreshChart() {
+    if (!tensionChart || !selectedKiteId) return;
+    const k = kites[selectedKiteId];
+    if (!k) return;
+    const labels = k.tensionData.map((_,i) =>
+        (i % 300 === 0 || i === k.tensionData.length-1)
+            ? new Date().toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'}) : '');
+    tensionChart.data.labels = labels;
+    tensionChart.data.datasets[0].data = [...k.tensionData];
+    tensionChart.data.datasets[0].borderColor = k.color;
+    tensionChart.data.datasets[1].data = [...k.pitchData];
+    tensionChart.data.datasets[2].data = [...k.lineData];
+    tensionChart.options.scales.y.ticks.color = k.color;
+    tensionChart.update('none');
+}
+
+// ============================================================
+//  Three.js — shared scene, per-kite objects
+// ============================================================
+const container = document.getElementById('threeContainer');
+let scene, camera, renderer;
+
+function initThreeJS() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x242424);
+    const fs = 4, aspect = container.clientWidth / container.clientHeight;
+    camera = new THREE.OrthographicCamera(fs*aspect/-2, fs*aspect/2, fs/2, fs/-2, 0.1, 1000);
+    camera.position.set(3,3,3); camera.lookAt(0,0,0);
+    renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    // Concentric distance circles (10m, 20m, 30m)
+    const createCircle = (radius, color, label) => {
+        const cp = [];
+        for (let i=0;i<=64;i++){const a=(i/64)*Math.PI*2; cp.push(new THREE.Vector3(radius*Math.cos(a),0,radius*Math.sin(a)));}
+        const cg = new THREE.BufferGeometry(); cg.setFromPoints(cp);
+        scene.add(new THREE.Line(cg, new THREE.LineBasicMaterial({color:color, transparent:true, opacity:0.3})));
+    };
+    createCircle(1, 0xffffff, '10m');  // radius 1 = 10m line
+    createCircle(2, 0x888888, '20m');  // radius 2 = 20m line
+    createCircle(3, 0x555555, '30m');  // radius 3 = 30m line (beyond max scale)
+    scene.add(new THREE.AxesHelper(1.2));
+
+    window.addEventListener('resize', onWindowResize);
+    animate();
+}
+
+function onWindowResize() {
+    const fs = 4, aspect = container.clientWidth / container.clientHeight;
+    camera.left = fs*aspect/-2; camera.right = fs*aspect/2;
+    camera.top = fs/2; camera.bottom = fs/-2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+
+// Create 3D objects for one kite (called once on first status)
+function createKite3D(k) {
+    const c = new THREE.Color(k.color);
+    const mkLine = (pts, mat) => { const g=new THREE.BufferGeometry(); g.setFromPoints(pts); return new THREE.Line(g, mat); };
+    const o = new THREE.Vector3(0,0,0), u = new THREE.Vector3(1,0,0);
+    k.line3d        = mkLine([o,u], new THREE.LineBasicMaterial({color:c, linewidth:3}));
+    k.projection3d  = mkLine([o,o.clone()], new THREE.LineBasicMaterial({color:0x888888, transparent:true, opacity:0.6}));
+    k.velocityArr3d = mkLine([o,o.clone()], new THREE.LineBasicMaterial({color:0x00ff00, transparent:true, opacity:0.8}));
+    k.dot3d         = new THREE.Mesh(new THREE.SphereGeometry(0.03,16,16), new THREE.MeshBasicMaterial({color:0xff0000}));
+    k.groundDot3d   = new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12), new THREE.MeshBasicMaterial({color:0x00ffff}));
+    [k.line3d, k.projection3d, k.velocityArr3d, k.dot3d, k.groundDot3d].forEach(o => scene.add(o));
+}
+
+function removeKite3D(k) {
+    [k.line3d, k.projection3d, k.velocityArr3d, k.dot3d, k.groundDot3d].forEach(o => {
+        if(o){ scene.remove(o); if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }
+    });
+}
+
+function updateKite3D(k) {
+    if (!k.line3d || !k.data || !k.data.imu) return;
+    const yaw = k.data.imu.yaw||0, pitch = k.data.imu.pitch||0, ll = k.data.line_length||0;
+    const yr = yaw*Math.PI/180, pr = pitch*Math.PI/180;
+    const r = Math.max(0.1, Math.min(ll/10, 2));
+    const x = r*Math.cos(pr)*Math.sin(yr), y = r*Math.sin(pr), z = r*Math.cos(pr)*Math.cos(yr);
+
+    const lp = k.line3d.geometry.attributes.position.array;
+    lp[3]=x; lp[4]=y; lp[5]=z; k.line3d.geometry.attributes.position.needsUpdate=true;
+    k.dot3d.position.set(x,y,z);
+
+    const pp = k.projection3d.geometry.attributes.position.array;
+    pp[0]=x; pp[1]=y; pp[2]=z; pp[3]=x; pp[4]=0; pp[5]=z;
+    k.projection3d.geometry.attributes.position.needsUpdate=true;
+    k.groundDot3d.position.set(x,0,z);
+
+    const pv = k.data.imu.pitch_velocity||0, sc = 0.03;
+    const tx=-Math.sin(pr)*Math.sin(yr), ty=Math.cos(pr), tz=-Math.sin(pr)*Math.cos(yr);
+    const ap = k.velocityArr3d.geometry.attributes.position.array;
+    ap[0]=x; ap[1]=y; ap[2]=z;
+    ap[3]=x+sc*pv*tx; ap[4]=y+sc*pv*ty; ap[5]=z+sc*pv*tz;
+    k.velocityArr3d.geometry.attributes.position.needsUpdate=true;
+}
+
+// ============================================================
+//  Kite Bar
+// ============================================================
+function renderKiteBar() {
+    const bar  = document.getElementById('kiteBar');
+    const list = document.getElementById('kiteList');
+    const multi = kiteEndpoints.length > 1 || Object.keys(kites).length > 1;
+    bar.style.display = multi ? 'flex' : 'none';
+    list.innerHTML = '';
+    for (const [id, k] of Object.entries(kites)) {
+        const chip = document.createElement('span');
+        chip.className = 'kite-chip' + (id === selectedKiteId ? ' selected' : '') + (!k.connected ? ' disconnected' : '');
+        chip.style.color = k.color;
+        chip.innerHTML = '<span class="dot" style="background:'+k.color+'"></span>' + id;
+        if (k.endpoint !== '') {
+            const safe = k.endpoint.replace(/'/g, "\\'");
+            chip.innerHTML += '<span class="remove" onclick="event.stopPropagation();removeKiteEndpoint(\''+safe+'\')">&times;</span>';
+        }
+        chip.onclick = function(){ selectKite(id); };
+        list.appendChild(chip);
+    }
+}
+
+// ============================================================
+//  UI Updates (left + middle columns) for the selected kite
+// ============================================================
+function updateCards(data) {
+    if (!data || !data.imu) return;
+    const cv = data.motor.commanded_velocity||0;
+    document.getElementById('joystickInput').textContent   = formatValue(data.joystick.remote_command||0, 4, 0, true);
+    document.getElementById('lineSpeedReq').textContent    = formatValue(cv*METERS_PER_REV, 5, 2, true) + ' m/s';
+    document.getElementById('lineTension').textContent     = formatValue(data.motor.tension||0, 4, 1, false) + ' N';
+    document.getElementById('lineLength').textContent      = formatValue(data.line_length||0, 6, 2, false) + ' m';
+    document.getElementById('pitch').textContent           = formatValue(data.imu.pitch||0, 5, 1, true) + '\u00b0';
+    document.getElementById('yaw').textContent             = formatValue(data.imu.yaw||0, 6, 1, true) + '\u00b0';
+
+    if (data.autopilot) {
+        const smt = data.autopilot.slack_min_torque / SPOOL_RADIUS_M;
+        const sxt = data.autopilot.slack_max_torque / SPOOL_RADIUS_M;
+        document.getElementById('apEnabled').textContent    = data.autopilot.enabled ? 'Yes' : 'No';
+        document.getElementById('apSlack').textContent      = data.autopilot.slack ? 'Yes' : 'No';
+        document.getElementById('apTarget').textContent     = formatValue(data.autopilot.target, 5, 2, false);
+        document.getElementById('apMaxVel').textContent     = formatValue(data.autopilot.max_velocity, 4, 1, false);
+        document.getElementById('apAccel').textContent      = formatValue(data.autopilot.accel, 3, 1, false);
+        document.getElementById('apDecel').textContent      = formatValue(data.autopilot.decel, 3, 1, false);
+        document.getElementById('apDeadband').textContent   = formatValue(data.autopilot.deadband, 4, 3, false);
+        document.getElementById('apSlackRange').textContent = formatValue(smt,5,1,false)+'-'+formatValue(sxt,5,1,false)+' N';
+    }
+}
+
+// ============================================================
+//  Polling
+// ============================================================
+async function pollKite(endpoint) {
+    try {
+        const ctrl = new AbortController();
+        const tid  = setTimeout(() => ctrl.abort(), 2000);
+        const resp = await fetch(endpoint + '/status', { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        const kiteId = data.kite_id || (endpoint === '' ? 'Kite' : endpoint);
+        const color  = data.kite_color || '#5ab5ff';
+
+        // First time seeing this kite?
+        if (!kites[kiteId]) {
+            kites[kiteId] = { endpoint, color, data:null, connected:false,
+                              tensionData:[], pitchData:[], lineData:[] };
+            createKite3D(kites[kiteId]);
+            if (!selectedKiteId) selectedKiteId = kiteId;
+            renderKiteBar();
+        }
+
+        const k = kites[kiteId];
+        k.data = data; k.connected = true; k.lastSeen = Date.now();
+
+        // Accumulate chart arrays
+        if (data.imu) {
+            k.tensionData.push(data.motor.tension||0);
+            k.pitchData.push(data.imu.pitch||0);
+            k.lineData.push(data.line_length||0);
+            if (k.tensionData.length > MAX_DATA_POINTS) {
+                k.tensionData.shift(); k.pitchData.shift(); k.lineData.shift();
+            }
+        }
+
+        // CSV recording (all connected kites)
+        if (isRecording && data.imu) {
+            const ts = Date.now()-recordingStartTime, now = new Date();
+            csvData.push([
+                now.toLocaleDateString('en-CA'),
+                now.toLocaleTimeString('en-GB',{hour12:false}),
+                ts, kiteId,
+                (data.motor.commanded_velocity||0).toFixed(4),
+                (data.motor.actual_velocity||0).toFixed(4),
+                (data.motor.torque||0).toFixed(4),
+                (data.motor.tension||0).toFixed(4),
+                (data.line_length||0).toFixed(4),
+                data.target_seeking_enabled ? 1 : 0,
+                (data.line_length_target||0).toFixed(4),
+                data.joystick.remote_command||0,
+                data.joystick.remote_active ? 1 : 0,
+                (data.imu.pitch||0).toFixed(4),
+                (data.imu.pitch_velocity||0).toFixed(4),
+                (data.imu.yaw||0).toFixed(4),
+                (data.imu.yaw_velocity||0).toFixed(4),
+                (data.imu.roll||0).toFixed(4)
+            ]);
+            updateSampleCount();
+        }
+    } catch(e) {
+        console.error('[pollKite] Error fetching from ' + (endpoint || 'localhost') + ':', e.message);
+        // Mark any kite on this endpoint as disconnected
+        for (const k of Object.values(kites)) { if (k.endpoint === endpoint) k.connected = false; }
+    }
+}
+
+async function pollAllKites() {
+    await Promise.allSettled(kiteEndpoints.map(ep => pollKite(ep)));
+    // Update UI for the selected kite
+    if (selectedKiteId && kites[selectedKiteId]) {
+        updateCards(kites[selectedKiteId].data);
+        refreshChart();
+    }
+    // Update 3D for every kite
+    for (const k of Object.values(kites)) updateKite3D(k);
+}
+
+async function pollLoop() {
+    const t0 = performance.now();
+    console.log('[pollLoop] Started. kiteEndpoints:', kiteEndpoints, 'selectedKiteId:', selectedKiteId);
+    await pollAllKites();
+    setTimeout(pollLoop, Math.max(1, 33 - (performance.now() - t0)));
+}
+
+// ============================================================
+//  Init
+// ============================================================
+initThreeJS();
+initTensionChart();
+loadKiteConfig();
+toggleRecording();               // auto-start recording
+
+window.addEventListener('beforeunload', function() {
+    if (isRecording && csvData.length > 0) {
+        isRecording = false;
+        const blob = new Blob([buildCSV()], {type:'text/csv'});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rfx_data_' + new Date().toISOString().replace(/[:.]/g,'-') + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+});
+
+pollLoop();
+    </script>
+</body>
+</html>

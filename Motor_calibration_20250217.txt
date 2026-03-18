@@ -1,0 +1,116 @@
+Clibration done 2025-02-17
+with (almost) fully charged Makita battery as power source
+
+TVIEW REF:
+https://mjbots.github.io/moteus/guides/control-modes/#__tabbed_1_1
+Constant Acceleration Trajectories
+Velocity and acceleration limits can be configured either globally, or on a per-command basis which will cause moteus to internally generate continuous acceleration limited trajectories to reach the given position and velocity. Once the trajectory is complete, the command velocity is continued indefinitely.
+Diagnostic Protocol
+
+    # Move to position 1 then stop.  Accelerate/decelerate at 2Hz/s
+    # and use a maximum velocity of 0.5Hz.
+    d pos 1 0 nan a2 v0.5
+
+
+
+Calibration complete
+REPORT: moteus-cal-AFkAOjgwUAUgOTdX-20260217T135032.614625.log
+------------------------
+{
+  "timestamp": "2026-02-17 13:50:32.614625",
+  "device_info": {
+    "serial_number": "AFkAOjgwUAUgOTdX",
+    "model": "0",
+    "git_hash": "6262f1a4800d691e6a662b9de73dcd6788664e76",
+    "git_dirty": false,
+    "git_timestamp": 1766080427,
+    "uuid": "cb7ed0c8-06af-4811-be4e-1ff4787f0458"
+  },
+  "calibration": {
+    "invert": false,
+    "phase_invert": true,
+    "poles": 14,
+    "offset": [
+      2.0298071359323773,
+      2.023416299478505,
+      2.0241163059313623,
+      2.0194031259338208,
+      2.0168999063017163,
+      2.012382095462287,
+      2.0061445548292482,
+      2.0028626004404364,
+      1.993626289369946,
+      1.9867672711321132,
+      1.9813372037603911,
+      1.9789140736449022,
+      1.9745176833389857,
+      1.9644000718748196,
+      1.9596215860500372,
+      1.9574257083974937,
+      1.9548937584242316,
+      1.9499987583316631,
+      1.9527658235724699,
+      1.945837346717303,
+      1.9499963910112026,
+      1.9533875016965996,
+      1.9573088243929935,
+      1.971335580008763,
+      1.974621914111848,
+      1.9806426593533941,
+      1.9906311158982697,
+      1.9924755488640726,
+      1.9922239083661137,
+      1.9908983972751073,
+      1.987884269758152,
+      1.9897122896266193,
+      1.9932962213153287,
+      1.9852366054444803,
+      1.9845195405666292,
+      1.977075128294637,
+      1.974680574836054,
+      1.9719336328091985,
+      1.9697056039106289,
+      1.976912827525872,
+      1.9703069825865185,
+      1.9714897816233798,
+      1.9718095971996803,
+      1.9698127961415197,
+      1.9689949933025228,
+      1.9604985020867352,
+      1.9548510922042874,
+      1.9568477173458663,
+      1.9620965968412638,
+      1.96509416738553,
+      1.9721498739519925,
+      1.9741069067616772,
+      1.981171141503293,
+      1.9886756973750204,
+      1.993341325902905,
+      2.0084188640313916,
+      2.011575377774829,
+      2.018810406322062,
+      2.026784621903825,
+      2.0373299211543316,
+      2.0439114884447274,
+      2.040092765641352,
+      2.036512249597003,
+      2.0339664211978925
+    ],
+    "fit_metric": 19.83888831898323,
+    "current_quality_factor": 328.26246608595125
+  },
+  "winding_resistance": 0.06185746957806523,
+  "inductance": 2.6277045008887137e-05,
+  "pid_dq_kp": 0.03302070862318727,
+  "pid_dq_ki": 77.73238879844155,
+  "torque_bw_hz": 200.0,
+  "encoder_filter_bw_hz": 200.0,
+  "encoder_filter_kp": 1013.4169850289654,
+  "encoder_filter_ki": 256753.49638629958,
+  "kv": 308.4815127432755,
+  "unwrapped_position_scale": 1.0,
+  "motor_position_output_sign": 1.0,
+  "abi_version": 268,
+  "voltage_mode_control": false,
+  "py_version": "0.3.98"
+}
