@@ -10,9 +10,22 @@
 
 // =================== PINS ===================
 // Joystick - ESP32-S3 compatible pins (avoid strapping pins 0, 1, 2)
-#define JOYSTICK_X_PIN    4   // ADC1_CH5
-#define JOYSTICK_Y_PIN    5   // ADC1_CH6
-#define JOYSTICK_SW_PIN   10   // Button
+//// option 1 - CHECKED
+// #define JOYSTICK_X_PIN    6
+// #define JOYSTICK_Y_PIN    7
+// #define JOYSTICK_SW_PIN   39
+// // option 2 - CHECKED
+// #define JOYSTICK_X_PIN    4
+// #define JOYSTICK_Y_PIN    5
+// #define JOYSTICK_SW_PIN   40
+// // option 3 - CHECKED
+// #define JOYSTICK_X_PIN    12   
+// #define JOYSTICK_Y_PIN    10
+// #define JOYSTICK_SW_PIN   41
+// option 4 - CHECKED
+#define JOYSTICK_X_PIN    13
+#define JOYSTICK_Y_PIN    11
+#define JOYSTICK_SW_PIN   42
 
 // =================== CONFIG ===================
 const char* WIFI_SSID = "iPhone 123";
