@@ -218,7 +218,7 @@
     let playbackTimer = null;
     let isPlaying = false;
     let chart = null;
-    const chartMaxPoints = 3600;
+    const chartMaxPoints = 300;
 
     // --- Dive Detector State ---
     let filteredPitchVelocity = 0;
@@ -329,7 +329,8 @@
             data: { labels: [], datasets: [
                 { label:'Tension (N)',      data:[], borderColor:'#5ab5ff', backgroundColor:'rgba(90,181,255,0.1)',  borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y'  },
                 { label:'Pitch (°)',        data:[], borderColor:'#ffb85c', backgroundColor:'rgba(255,184,92,0.1)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y1' },
-                { label:'Line Length (m)',  data:[], borderColor:'#E5E5E5', backgroundColor:'rgba(229,229,229,0.05)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y2' }
+                { label:'Line Length (m)',  data:[], borderColor:'#E5E5E5', backgroundColor:'rgba(229,229,229,0.05)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y2' },
+                { label:'Dive Confidence',  data:[], borderColor:'#f44336', backgroundColor:'rgba(244,67,54,0.1)',   borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y3' }
             ]},
             options: {
                 responsive:true, maintainAspectRatio:false,
@@ -338,6 +339,7 @@
                     y: { type:'linear', display:true, position:'left',  beginAtZero:true, max:20, ticks:{color:'#5ab5ff'}, grid:{color:'#444'} },
                     y1:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:90, ticks:{color:'#ffb85c'}, grid:{drawOnChartArea:false} },
                     y2:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:2,  ticks:{color:'#E5E5E5'}, grid:{drawOnChartArea:false}, offset:true },
+                    y3:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:100, ticks:{color:'#f44336'}, grid:{drawOnChartArea:false}, offset:true },
                     x: { ticks:{color:'#999'}, grid:{color:'#444'} }
                 }
             }
@@ -452,29 +454,46 @@
 
     // Append data to chart arrays (fast — no rendering)
     let chartMaxLineLength = 0;
+    // Cache chart array references (set after initChart)
+    let cLabels, cD0, cD1, cD2, cD3;
+    function cacheChartArrays() {
+        cLabels = chart.data.labels;
+        cD0 = chart.data.datasets[0].data;
+        cD1 = chart.data.datasets[1].data;
+        cD2 = chart.data.datasets[2].data;
+        cD3 = chart.data.datasets[3].data;
+    }
+
+    // Push one row into chart arrays (no trim, no render)
     function appendChartData(row) {
         if (!chart) return;
-        chart.data.labels.push('');
-        const t = row['Tension_N'];
-        const p = row['Pitch_deg'];
+        cLabels.push('');
+        cD0.push(row['Tension_N']);
+        cD1.push(row['Pitch_deg']);
         const l = row['Line_Length_m'];
-        chart.data.datasets[0].data.push(t);
-        chart.data.datasets[1].data.push(p);
-        chart.data.datasets[2].data.push(l);
+        cD2.push(l);
+        cD3.push(Math.round(diveConfidence * 100));
         if (l > chartMaxLineLength) chartMaxLineLength = l;
-        // Trim excess points
-        if (chart.data.labels.length > chartMaxPoints) {
-            chart.data.labels.shift();
-            chart.data.datasets[0].data.shift();
-            chart.data.datasets[1].data.shift();
-            const removed = chart.data.datasets[2].data.shift();
-            // Only recompute max if we removed the current max
-            if (removed >= chartMaxLineLength) {
-                chartMaxLineLength = 0;
-                const arr = chart.data.datasets[2].data;
-                for (let j = 0; j < arr.length; j++) {
-                    if (arr[j] > chartMaxLineLength) chartMaxLineLength = arr[j];
-                }
+    }
+
+    // Bulk-trim chart arrays to chartMaxPoints (call once per frame, not per row)
+    function trimChartData() {
+        const excess = cLabels.length - chartMaxPoints;
+        if (excess <= 0) return;
+        cLabels.splice(0, excess);
+        cD0.splice(0, excess);
+        cD1.splice(0, excess);
+        const removed = cD2.splice(0, excess);
+        cD3.splice(0, excess);
+        // Recompute max only if we removed the current max
+        let needRecompute = false;
+        for (let j = 0; j < removed.length; j++) {
+            if (removed[j] >= chartMaxLineLength) { needRecompute = true; break; }
+        }
+        if (needRecompute) {
+            chartMaxLineLength = 0;
+            for (let j = 0, len = cD2.length; j < len; j++) {
+                if (cD2[j] > chartMaxLineLength) chartMaxLineLength = cD2[j];
             }
         }
     }
@@ -543,9 +562,10 @@
             if (batchSize > 0) {
                 // Push data for all rows in the batch (fast, no rendering)
                 for (let i = batchStart; i < playbackIndex; i++) {
-                    appendChartData(csvRows[i]);
                     updateDiveDetector(csvRows[i]);
+                    appendChartData(csvRows[i]);
                 }
+                trimChartData();
                 // Render dashboard + chart + detector UI only once for the last row
                 const lastRow = csvRows[playbackIndex - 1];
                 updateDashboard(lastRow);
@@ -591,6 +611,7 @@
         if (chart) {
             chart.data.labels = [];
             chart.data.datasets.forEach(ds => ds.data = []);
+            cacheChartArrays();
             chart.update('none');
         }
         document.getElementById('playhead').value = 0;
@@ -602,23 +623,33 @@
         if (!csvRows.length) return;
         pause();
         playbackIndex = Number(e.target.value);
-        // Redraw chart up to this point
-        if (chart) {
-            chart.data.labels = [];
-            chart.data.datasets.forEach(ds => ds.data = []);
-            for (let i = 0; i <= playbackIndex && i < csvRows.length; i++) {
-                chart.data.labels.push('');
-                chart.data.datasets[0].data.push(csvRows[i]['Tension_N']);
-                chart.data.datasets[1].data.push(csvRows[i]['Pitch_deg']);
-                chart.data.datasets[2].data.push(csvRows[i]['Line_Length_m']);
-            }
-            chart.update('none');
-        }
-        // Recalculate dive detector from beginning to scrubbed position
+        // Recalculate dive detector from beginning in one pass,
+        // and collect chart data for the last chartMaxPoints rows
         resetDiveDetector();
-        for (let i = 0; i <= playbackIndex && i < csvRows.length; i++) {
+        chart.data.labels = [];
+        chart.data.datasets.forEach(ds => ds.data = []);
+        cacheChartArrays();
+        chartMaxLineLength = 0;
+        const chartStart = Math.max(0, playbackIndex - chartMaxPoints + 1);
+        // Advance detector state up to chartStart (no chart data needed)
+        for (let i = 0; i < chartStart && i < csvRows.length; i++) {
             updateDiveDetector(csvRows[i]);
         }
+        // From chartStart onward: update detector AND push chart data
+        for (let i = chartStart; i <= playbackIndex && i < csvRows.length; i++) {
+            updateDiveDetector(csvRows[i]);
+            const row = csvRows[i];
+            cLabels.push('');
+            cD0.push(row['Tension_N']);
+            cD1.push(row['Pitch_deg']);
+            const l = row['Line_Length_m'];
+            cD2.push(l);
+            cD3.push(Math.round(diveConfidence * 100));
+            if (l > chartMaxLineLength) chartMaxLineLength = l;
+        }
+        const padding = Math.max(chartMaxLineLength * 0.15, 0.5);
+        chart.options.scales.y2.max = Math.ceil((chartMaxLineLength + padding) * 2) / 2;
+        chart.update('none');
         updateDashboard(csvRows[playbackIndex]);
         renderDiveDetectorUI();
     });
@@ -719,6 +750,7 @@
 
     window.onload = function() {
         initChart();
+        cacheChartArrays();
         initThreeJS();
         document.getElementById('togglePlayBtn').disabled = true;
         document.getElementById('playhead').disabled = true;
