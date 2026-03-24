@@ -2,6 +2,13 @@
 #define AUTOPILOT_H
 
 #include <Arduino.h>
+#include "detector_params.h"
+
+// ===== Detector Results =====
+struct DetectorState {
+  float dive_confidence = 0.0f;      // 0.0 - 1.0: confidence that kite is diving
+  // Future detectors can be added here
+};
 
 class Autopilot {
 public:
@@ -38,6 +45,15 @@ public:
 
   float getFilteredTorque() const { return _filtered_torque; }
 
+  // ===== Detectors =====
+  // Call updateDetectors() each cycle with IMU data, independent of autopilot enable state
+  void updateDetectors(float pitch_deg, float pitch_velocity_dps, float tension_n, float dt);
+  const DetectorState& getDetectors() const { return _detectors; }
+  
+  // Detector configuration
+  void setDiveDetectorParams(float pitch_rate_threshold_dps, float tension_threshold_n, 
+                              float attack_rate, float decay_rate);
+
 private:
   bool _enabled = false;
 
@@ -72,6 +88,17 @@ private:
 
   void _updateMetersPerRev();
   float _distanceToRevolutions(float meters) const;
+
+  // ===== Detectors =====
+  DetectorState _detectors;
+  
+  // Dive detector parameters (defaults from detector_params.h)
+  float _dive_pitch_rate_threshold = DIVE_PITCH_RATE_THRESHOLD;
+  float _dive_tension_threshold = DIVE_TENSION_THRESHOLD;
+  float _dive_attack_rate = DIVE_ATTACK_RATE;
+  float _dive_decay_rate = DIVE_DECAY_RATE;
+  float _filtered_pitch_velocity = 0.0f;
+  float _pitch_velocity_alpha = DIVE_PITCH_VELOCITY_ALPHA;
 };
 
 #endif // AUTOPILOT_H

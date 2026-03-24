@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CclipPath id='c'%3E%3Ccircle cx='16' cy='16' r='16'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='32' height='32' fill='%235ab5ff'/%3E%3Cpolygon points='0,0 32,0 0,32' fill='white'/%3E%3C/g%3E%3C/svg%3E">
+    <title>RFx Dashboard Replay</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 12px; background: #242424; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ffffff; }
+        .card { background: #242424; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
+        .card.light-mode { background: #ddd; }
+        .card.light-mode h3 { color: #242424; }
+        .card.light-mode .value { color: #242424; }
+        .card.light-mode .label { color: #555; }
+        .card h3 { margin-top: 0; color: #c7c7c7; font-size: 14px; }
+        .value { font-size: 20px; font-weight: bold; color: #5ab5ff; font-family: 'Courier New', monospace; min-width: 120px; display: inline-block; white-space: pre; }
+        .label { font-size: 11px; color: #999; margin-top: 3px; font-family: 'Courier New', monospace; }
+        .label-secondary { font-size: 10px; color: #777; margin-top: 2px; }
+        #threeContainer { width: 100%; height: 450px; border-radius: 8px; }
+        #tensionChart { width: 100% !important; height: 200px !important; }
+        button { padding: 12px 20px; font-size: 14px; border: 1px solid #666; border-radius: 4px;
+                 background: #333; color: #fff; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #555; border-color: #888; }
+        button:active { background: #222; }
+        .danger { background: #8b0000; }
+        .danger:hover { background: #a00000; }
+        #uploadBar { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="uploadBar" class="card light-mode" style="display:flex;align-items:center;gap:16px;margin-bottom:24px;border:1px solid #fff;">
+            <input type="file" id="fileInput" accept=".csv,.txt" style="margin:0;">
+            <button id="togglePlayBtn" disabled style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:#333;border:1px solid #666;border-radius:50%;padding:0;cursor:pointer;transition:0.2s;">
+                <span id="togglePlayIcon" style="display:flex;align-items:center;justify-content:center;">
+                    <!-- Play icon SVG -->
+                    <svg id="playIcon" width="22" height="22" viewBox="0 0 22 22" fill="none"><polygon points="6,4 18,11 6,18" fill="#5ab5ff"/></svg>
+                </span>
+            </button>
+            <input type="range" id="playhead" min="0" max="0" value="0" step="1" style="flex:1;max-width:300px;height:28px;accent-color:#5ab5ff;cursor:pointer;">
+                <style>
+                    /* ...existing styles... */
+                    input[type=range] {
+                        -webkit-appearance: none;
+                        width: 100%;
+                        background: transparent;
+                    }
+                    input[type=range]:focus {
+                        outline: none;
+                    }
+                    input[type=range]::-webkit-slider-runnable-track {
+                        height: 8px;
+                        background: #444;
+                        border-radius: 4px;
+                        border: 1px solid #888;
+                    }
+                    input[type=range]::-webkit-slider-thumb {
+                        -webkit-appearance: none;
+                        width: 18px;
+                        height: 18px;
+                        border-radius: 50%;
+                        background: #5ab5ff;
+                        border: 2px solid #fff;
+                        margin-top: -5px;
+                        cursor: pointer;
+                        transition: background 0.2s;
+                    }
+                    input[type=range]:active::-webkit-slider-thumb {
+                        background: #3399ff;
+                    }
+                    input[type=range]::-moz-range-thumb {
+                        width: 18px;
+                        height: 18px;
+                        border-radius: 50%;
+                        background: #5ab5ff;
+                        border: 2px solid #fff;
+                        cursor: pointer;
+                        transition: background 0.2s;
+                    }
+                    input[type=range]:active::-moz-range-thumb {
+                        background: #3399ff;
+                    }
+                    input[type=range]::-ms-thumb {
+                        width: 18px;
+                        height: 18px;
+                        border-radius: 50%;
+                        background: #5ab5ff;
+                        border: 2px solid #fff;
+                        cursor: pointer;
+                        transition: background 0.2s;
+                    }
+                    input[type=range]:active::-ms-thumb {
+                        background: #3399ff;
+                    }
+                    input[type=range]::-ms-fill-lower {
+                        background: #444;
+                        border-radius: 4px;
+                    }
+                    input[type=range]::-ms-fill-upper {
+                        background: #444;
+                        border-radius: 4px;
+                    }
+                    input[type=range]:focus::-ms-fill-lower {
+                        background: #444;
+                    }
+                    input[type=range]:focus::-ms-fill-upper {
+                        background: #444;
+                    }
+                    input[type=range]:focus {
+                        outline: none;
+                    }
+                    input[type=range]::-moz-range-track {
+                        height: 8px;
+                        background: #444;
+                        border-radius: 4px;
+                        border: 1px solid #888;
+                    }
+                    input[type=range]::-ms-tooltip {
+                        display: none;
+                    }
+                </style>
+            <span id="playbackStatus" style="color:#5ab5ff;margin-left:10px;"></span>
+            <span id="paramsStatus" title="Detector parameters source" style="margin-left:auto;padding:3px 10px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;background:#333;color:#888;border:1px solid #555;">params: checking&hellip;</span>
+        </div>
+        <div style="display: flex; gap: 20px;">
+            <!-- Left column: cards -->
+            <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 20px; width: 180px;">
+                <div class="card light-mode">
+                    <h3>Joystick Input</h3>
+                    <div class="value" id="joystickInput" style="text-align: right;">0</div>
+                </div>
+                <div class="card">
+                    <h3>Pitch</h3>
+                    <div class="value" id="pitch" style="text-align: right;">0.0&deg;</div>
+                </div>
+                <div class="card">
+                    <h3>Yaw</h3>
+                    <div class="value" id="yaw" style="text-align: right;">0.0&deg;</div>
+                </div>
+                <div class="card">
+                    <h3>Line Length</h3>
+                    <div class="value" id="lineLength" style="text-align: right;">0.00 m</div>
+                </div>
+                <div class="card">
+                    <h3>Line Speed</h3>
+                    <div class="value" id="lineSpeedReq" style="text-align: right;">0.00 m/s</div>
+                </div>
+                <div class="card">
+                    <h3>Line Tension</h3>
+                    <div class="value" id="lineTension" style="text-align: right;">0.0 N</div>
+                </div>
+                <div class="card">
+                    <h3>Detectors</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">Dive:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="diveConfidenceBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="diveConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Middle column: Autopilot + Recording -->
+            <div style="flex: 0 0 180px; display: flex; flex-direction: column; gap: 20px;">
+                <div class="card" id="motorStatusCard">
+                    <h3>Motor Status</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                        <div><span style="color:#fff;">Mode:</span> <span id="motorMode" style="color:#5ab5ff;">—</span></div>
+                        <div><span style="color:#fff;">Fault:</span> <span id="motorFault" style="color:#5ab5ff;">No Fault</span></div>
+                        <div id="faultAlert" style="display:none; padding:6px; background:#8b0000; border-radius:3px; color:#ff9999; font-size:11px; margin-top:4px;"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Autopilot</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                        <div><span style="color:#fff;">Enabled:</span> <span id="apEnabled" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Slack:</span> <span id="apSlack" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Target:</span> <span id="apTarget" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
+                        <div><span style="color:#fff;">Max Vel:</span> <span id="apMaxVel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s</span></div>
+                        <div><span style="color:#fff;">Accel:</span> <span id="apAccel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s&sup2;</span></div>
+                        <div><span style="color:#fff;">Decel:</span> <span id="apDecel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s&sup2;</span></div>
+                        <div><span style="color:#fff;">Deadband:</span> <span id="apDeadband" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
+                        <div><span style="color:#fff;">Slack Range:</span> <span id="apSlackRange" style="color:#5ab5ff;">&mdash;</span></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Prevailing Wind Est.</h3>
+                    <div class="value" id="windDirection" style="text-align: right;">0.0&deg;</div>
+                    <div class="label" id="windDirectionSamples">0 samples</div>
+                </div>
+                <div class="card light-mode">
+                    <h3>Playback Time</h3>
+                    <div class="value" id="playbackDate" style="text-align: right; font-size:13px;">—</div>
+                    <div class="label" id="playbackTime" style="font-size:13px;">—</div>
+                </div>
+            </div>
+            <!-- Right column: 3D view and chart -->
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                <div class="card">
+                    <div id="threeContainer"></div>
+                </div>
+                <div class="card">
+                    <h3>Line Tension - Pitch Angle</h3>
+                    <canvas id="tensionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    // --- CSV Replay Logic ---
+    let csvRows = [];
+    let playbackIndex = 0;
+    let playbackTimer = null;
+    let isPlaying = false;
+    let chart = null;
+    const chartMaxPoints = 3600;
+
+    // --- Dive Detector State ---
+    let filteredPitchVelocity = 0;
+    let diveConfidence = 0;
+    let prevPitchDeg = null;
+    let prevTimestampMs = null;
+
+    // Detector parameters — loaded from firmware /status endpoint.
+    // Defaults here match include/detector_params.h; overwritten on successful fetch.
+    let PITCH_VELOCITY_ALPHA = 0.15;
+    let DIVE_PITCH_RATE_THRESHOLD = -5.0;
+    let DIVE_TENSION_THRESHOLD = 0.8;
+    let DIVE_ATTACK_RATE = 2.0;
+    let DIVE_DECAY_RATE = 1.0;
+
+    // Try to load detector params from the ESP32 that served this page.
+    // Skip the fetch if running standalone (file:// or localhost) — defaults are fine there.
+    (async function loadDetectorParams() {
+        const statusEl = document.getElementById('paramsStatus');
+        const isStandalone = location.protocol === 'file:' ||
+                             location.hostname === 'localhost' ||
+                             location.hostname === '127.0.0.1' ||
+                             location.hostname === '';
+        if (isStandalone) {
+            statusEl.textContent = 'params: defaults (standalone)';
+            statusEl.style.color = '#888';
+            statusEl.style.borderColor = '#555';
+            console.log('Standalone mode — using built-in detector defaults');
+            return;
+        }
+        try {
+            const resp = await fetch('/status', { signal: AbortSignal.timeout(2000) });
+            if (!resp.ok) {
+                statusEl.textContent = 'params: HTTP ' + resp.status;
+                statusEl.style.color = '#FF9800';
+                statusEl.style.borderColor = '#FF9800';
+                console.warn('Detector params fetch failed: HTTP', resp.status);
+                return;
+            }
+            const data = await resp.json();
+            if (data.detectors) {
+                const d = data.detectors;
+                if (d.dive_pitch_rate_threshold !== undefined) DIVE_PITCH_RATE_THRESHOLD = d.dive_pitch_rate_threshold;
+                if (d.dive_tension_threshold !== undefined)    DIVE_TENSION_THRESHOLD = d.dive_tension_threshold;
+                if (d.dive_attack_rate !== undefined)          DIVE_ATTACK_RATE = d.dive_attack_rate;
+                if (d.dive_decay_rate !== undefined)           DIVE_DECAY_RATE = d.dive_decay_rate;
+                if (d.dive_pitch_velocity_alpha !== undefined) PITCH_VELOCITY_ALPHA = d.dive_pitch_velocity_alpha;
+                statusEl.textContent = 'params: from firmware';
+                statusEl.style.color = '#4CAF50';
+                statusEl.style.borderColor = '#4CAF50';
+                console.log('Detector params loaded from firmware:', { DIVE_PITCH_RATE_THRESHOLD, DIVE_TENSION_THRESHOLD, DIVE_ATTACK_RATE, DIVE_DECAY_RATE, PITCH_VELOCITY_ALPHA });
+            } else {
+                statusEl.textContent = 'params: no detector data';
+                statusEl.style.color = '#FF9800';
+                statusEl.style.borderColor = '#FF9800';
+                console.warn('Detector params: /status returned no detectors object');
+            }
+        } catch (e) {
+            const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+            statusEl.textContent = isTimeout ? 'params: timeout (defaults)' : 'params: unreachable (defaults)';
+            statusEl.style.color = '#FF9800';
+            statusEl.style.borderColor = '#FF9800';
+            statusEl.title = 'Error: ' + e.message + ' — using built-in defaults';
+            console.warn('Detector params fallback to defaults.', e.name + ':', e.message);
+        }
+    })();
+
+    // Numeric CSV fields to pre-parse at load time
+    const NUMERIC_FIELDS = ['Timestamp_ms','Tension_N','Line_Length_m','Pitch_deg','Yaw_deg',
+                            'Remote_Joy','Commanded_Vel_rps','Target_Length_m'];
+
+    // Parse CSV text into array of objects with pre-parsed numerics
+    function parseCSV(text) {
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        // Find header row (skip comments)
+        let headerIdx = lines.findIndex(l => l.startsWith('Date,'));
+        if (headerIdx === -1) return [];
+        const headers = lines[headerIdx].split(',').map(h => h.trim());
+        const dataLines = lines.slice(headerIdx + 1);
+        return dataLines.map(line => {
+            const vals = line.split(',');
+            let obj = {};
+            headers.forEach((h, i) => {
+                const raw = vals[i] ? vals[i].trim() : '';
+                obj[h] = NUMERIC_FIELDS.includes(h) ? (Number(raw) || 0) : raw;
+            });
+            return obj;
+        });
+    }
+
+    // UI update helpers
+    function setText(id, val) {
+        document.getElementById(id).textContent = val;
+    }
+
+    // Format helpers (match dashboard)
+    function formatValue(value, width, decimals, showSign) {
+        const f = Number(value).toFixed(decimals);
+        const s = showSign ? (f.startsWith('-') ? f : ' ' + f) : f;
+        return s.padStart(width, ' ');
+    }
+
+    // Chart.js setup
+    function initChart() {
+        const ctx = document.getElementById('tensionChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label:'Tension (N)',      data:[], borderColor:'#5ab5ff', backgroundColor:'rgba(90,181,255,0.1)',  borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y'  },
+                { label:'Pitch (°)',        data:[], borderColor:'#ffb85c', backgroundColor:'rgba(255,184,92,0.1)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y1' },
+                { label:'Line Length (m)',  data:[], borderColor:'#E5E5E5', backgroundColor:'rgba(229,229,229,0.05)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y2' }
+            ]},
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ display:false } },
+                scales:{
+                    y: { type:'linear', display:true, position:'left',  beginAtZero:true, max:20, ticks:{color:'#5ab5ff'}, grid:{color:'#444'} },
+                    y1:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:90, ticks:{color:'#ffb85c'}, grid:{drawOnChartArea:false} },
+                    y2:{ type:'linear', display:true, position:'right', beginAtZero:true, min:0, max:2,  ticks:{color:'#E5E5E5'}, grid:{drawOnChartArea:false}, offset:true },
+                    x: { ticks:{color:'#999'}, grid:{color:'#444'} }
+                }
+            }
+        });
+    }
+
+    // Calculate dive confidence from row data
+    // Compute-only dive detector update (no DOM touches — safe to call in tight loops)
+    function updateDiveDetector(row) {
+        const pitch = row['Pitch_deg'];
+        const tension = row['Tension_N'];
+        const timestamp = row['Timestamp_ms'];
+
+        // Calculate dt (seconds) and pitch velocity from consecutive samples
+        let dt_s = 0.033;  // fallback
+        let pitchVelocity = 0;
+        if (prevTimestampMs !== null && timestamp > prevTimestampMs) {
+            dt_s = (timestamp - prevTimestampMs) / 1000.0;
+            if (dt_s > 0.5) dt_s = 0.5;  // cap to avoid huge jumps on gaps
+            if (prevPitchDeg !== null) {
+                pitchVelocity = (pitch - prevPitchDeg) / dt_s;
+            }
+        }
+
+        // Store for next iteration (BEFORE using dt_s for attack/decay)
+        prevPitchDeg = pitch;
+        prevTimestampMs = timestamp;
+
+        // Update filtered pitch velocity (EMA)
+        if (filteredPitchVelocity === 0 && pitchVelocity !== 0) {
+            filteredPitchVelocity = pitchVelocity;
+        } else {
+            filteredPitchVelocity += PITCH_VELOCITY_ALPHA * (pitchVelocity - filteredPitchVelocity);
+        }
+
+        // Dive detection: pitch dropping consistently AND high tension
+        const pitchDropping = filteredPitchVelocity < DIVE_PITCH_RATE_THRESHOLD;
+        const highTension = tension > DIVE_TENSION_THRESHOLD;
+
+        if (pitchDropping && highTension) {
+            diveConfidence += DIVE_ATTACK_RATE * dt_s;
+            if (diveConfidence > 1.0) diveConfidence = 1.0;
+        } else {
+            diveConfidence -= DIVE_DECAY_RATE * dt_s;
+            if (diveConfidence < 0.0) diveConfidence = 0.0;
+        }
+    }
+
+    // Render current dive confidence to the DOM (call once per visible frame)
+    function renderDiveDetectorUI() {
+        const pct = Math.round(diveConfidence * 100);
+        setText('diveConfidenceValue', pct + '%');
+        const bar = document.getElementById('diveConfidenceBar');
+        bar.style.width = pct + '%';
+        if (diveConfidence < 0.3) {
+            bar.style.backgroundColor = '#4CAF50';
+        } else if (diveConfidence < 0.6) {
+            bar.style.backgroundColor = '#FFC107';
+        } else if (diveConfidence < 0.8) {
+            bar.style.backgroundColor = '#FF9800';
+        } else {
+            bar.style.backgroundColor = '#f44336';
+        }
+    }
+    
+    // Reset dive detector state
+    function resetDiveDetector() {
+        filteredPitchVelocity = 0;
+        diveConfidence = 0;
+        prevPitchDeg = null;
+        prevTimestampMs = null;
+    }
+
+    // Update dashboard UI from a CSV row (values are pre-parsed numerics)
+    function updateDashboard(row) {
+        setText('joystickInput', formatValue(row['Remote_Joy'], 4, 0, true));
+        setText('lineSpeedReq', formatValue(row['Commanded_Vel_rps']*0.2136, 5, 2, true) + ' m/s');
+        setText('lineTension', formatValue(row['Tension_N'], 4, 1, false) + ' N');
+        setText('lineLength', formatValue(row['Line_Length_m'], 6, 2, false) + ' m');
+        setText('pitch', formatValue(row['Pitch_deg'], 5, 1, true) + '\u00b0');
+        setText('yaw', formatValue(row['Yaw_deg'], 6, 1, false) + '\u00b0');
+        // Motor status (simple)
+        setText('motorMode', row['Target_Enabled'] === '1' ? 'Position' : 'Stopped');
+        setText('motorFault', 'No Fault');
+        document.getElementById('faultAlert').style.display = 'none';
+        document.getElementById('motorStatusCard').style.borderColor = '#ddd';
+        // Autopilot (simple)
+        setText('apEnabled', row['Target_Enabled'] === '1' ? 'Yes' : 'No');
+        setText('apSlack', 'No');
+        setText('apTarget', formatValue(row['Target_Length_m'], 5, 2, false));
+        setText('apMaxVel', formatValue(row['Commanded_Vel_rps'], 4, 1, false));
+        setText('apAccel', '—');
+        setText('apDecel', '—');
+        setText('apDeadband', '—');
+        setText('apSlackRange', '—');
+        // Wind direction (use yaw)
+        setText('windDirection', formatValue(row['Yaw_deg'], 6, 1, false) + '\u00b0');
+        setText('windDirectionSamples', playbackIndex + ' samples');
+        // Playback date/time
+        setText('playbackDate', row['Date'] || '—');
+        setText('playbackTime', row['Time'] || '—');
+        // Update 3D kite
+        updateKite3D(row);
+    }
+
+    // Dashboard + dive detector + UI render (used by non-playback callers)
+    function updateDashboardFull(row) {
+        updateDiveDetector(row);
+        updateDashboard(row);
+        renderDiveDetectorUI();
+    }
+
+    // Append data to chart arrays (fast — no rendering)
+    let chartMaxLineLength = 0;
+    function appendChartData(row) {
+        if (!chart) return;
+        chart.data.labels.push('');
+        const t = row['Tension_N'];
+        const p = row['Pitch_deg'];
+        const l = row['Line_Length_m'];
+        chart.data.datasets[0].data.push(t);
+        chart.data.datasets[1].data.push(p);
+        chart.data.datasets[2].data.push(l);
+        if (l > chartMaxLineLength) chartMaxLineLength = l;
+        // Trim excess points
+        if (chart.data.labels.length > chartMaxPoints) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+            chart.data.datasets[1].data.shift();
+            const removed = chart.data.datasets[2].data.shift();
+            // Only recompute max if we removed the current max
+            if (removed >= chartMaxLineLength) {
+                chartMaxLineLength = 0;
+                const arr = chart.data.datasets[2].data;
+                for (let j = 0; j < arr.length; j++) {
+                    if (arr[j] > chartMaxLineLength) chartMaxLineLength = arr[j];
+                }
+            }
+        }
+    }
+
+    // Render chart once (expensive — call only once per animation frame)
+    function flushChart() {
+        if (!chart) return;
+        const padding = Math.max(chartMaxLineLength * 0.15, 0.5);
+        chart.options.scales.y2.max = Math.ceil((chartMaxLineLength + padding) * 2) / 2;
+        chart.update('none');
+    }
+
+    // Legacy wrapper for non-playback callers (scrubbing etc.)
+    function updateChart(row) {
+        appendChartData(row);
+        flushChart();
+    }
+
+    // Playback logic — real-time using CSV timestamps
+    let playbackStartWall = 0;   // wall-clock ms when play() was called
+    let playbackStartData = 0;   // Timestamp_ms of the row we started from
+    let totalSkipped = 0;        // total frames skipped (batched but not individually rendered)
+    let maxBatch = 0;            // largest single-frame batch size seen
+
+    function play() {
+        if (!csvRows.length) return;
+        isPlaying = true;
+        totalSkipped = 0;
+        maxBatch = 0;
+        document.getElementById('togglePlayBtn').disabled = false;
+        document.getElementById('playhead').disabled = true;
+        setPlayPauseIcon();
+        document.getElementById('playbackStatus').textContent = 'Playing (' + playbackIndex + '/' + csvRows.length + ')';
+
+        // Anchor wall clock to current data timestamp
+        playbackStartWall = performance.now();
+        playbackStartData = Number(csvRows[playbackIndex]['Timestamp_ms'] || 0);
+
+        function step(now) {
+            if (!isPlaying || playbackIndex >= csvRows.length) {
+                isPlaying = false;
+                document.getElementById('togglePlayBtn').disabled = false;
+                document.getElementById('playhead').disabled = false;
+                setPlayPauseIcon();
+                const skipInfo = totalSkipped > 0
+                    ? '  |  skipped ' + totalSkipped + ' frames (max batch ' + maxBatch + ')'
+                    : '';
+                document.getElementById('playbackStatus').textContent = 'Done (' + playbackIndex + '/' + csvRows.length + ')' + skipInfo;
+                return;
+            }
+
+            // How much wall-clock time has elapsed since play started
+            const wallElapsed = now - playbackStartWall;
+            // Corresponding data timestamp we should be at
+            const targetDataTs = playbackStartData + wallElapsed;
+
+            // Count how many rows fall within this frame
+            let batchStart = playbackIndex;
+            while (playbackIndex < csvRows.length) {
+                const rowTs = csvRows[playbackIndex]['Timestamp_ms'];
+                if (rowTs > targetDataTs) break;
+                playbackIndex++;
+            }
+            let batchSize = playbackIndex - batchStart;
+
+            if (batchSize > 0) {
+                // Push data for all rows in the batch (fast, no rendering)
+                for (let i = batchStart; i < playbackIndex; i++) {
+                    appendChartData(csvRows[i]);
+                    updateDiveDetector(csvRows[i]);
+                }
+                // Render dashboard + chart + detector UI only once for the last row
+                const lastRow = csvRows[playbackIndex - 1];
+                updateDashboard(lastRow);
+                renderDiveDetectorUI();
+                flushChart();
+
+                let skippedThisFrame = Math.max(0, batchSize - 1);
+                totalSkipped += skippedThisFrame;
+                if (batchSize > maxBatch) maxBatch = batchSize;
+
+                document.getElementById('playhead').value = playbackIndex - 1;
+
+                // Build status text
+                let statusText = 'Playing (' + playbackIndex + '/' + csvRows.length + ')';
+                if (totalSkipped > 0) {
+                    statusText += '  |  skipped ' + totalSkipped + ' (batch ' + batchSize + ', max ' + maxBatch + ')';
+                }
+                document.getElementById('playbackStatus').textContent = statusText;
+            }
+
+            playbackTimer = requestAnimationFrame(step);
+        }
+        playbackTimer = requestAnimationFrame(step);
+    }
+    function pause() {
+        isPlaying = false;
+        document.getElementById('togglePlayBtn').disabled = false;
+        document.getElementById('playhead').disabled = false;
+        setPlayPauseIcon();
+        document.getElementById('playbackStatus').textContent = 'Paused';
+        if (playbackTimer) cancelAnimationFrame(playbackTimer);
+    }
+
+    function setPlayPauseIcon() {
+        const iconSpan = document.getElementById('togglePlayIcon');
+        iconSpan.innerHTML = isPlaying
+            ? '<svg id="pauseIcon" width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="5" y="4" width="4" height="14" rx="1.5" fill="#5ab5ff"/><rect x="13" y="4" width="4" height="14" rx="1.5" fill="#5ab5ff"/></svg>'
+            : '<svg id="playIcon" width="22" height="22" viewBox="0 0 22 22" fill="none"><polygon points="6,4 18,11 6,18" fill="#5ab5ff"/></svg>';
+    }
+    function resetPlayback() {
+        playbackIndex = 0;
+        chartMaxLineLength = 0;
+        if (chart) {
+            chart.data.labels = [];
+            chart.data.datasets.forEach(ds => ds.data = []);
+            chart.update('none');
+        }
+        document.getElementById('playhead').value = 0;
+        resetDiveDetector();
+    }
+
+    // Playhead (scrubbing) logic
+    document.getElementById('playhead').addEventListener('input', function(e) {
+        if (!csvRows.length) return;
+        pause();
+        playbackIndex = Number(e.target.value);
+        // Redraw chart up to this point
+        if (chart) {
+            chart.data.labels = [];
+            chart.data.datasets.forEach(ds => ds.data = []);
+            for (let i = 0; i <= playbackIndex && i < csvRows.length; i++) {
+                chart.data.labels.push('');
+                chart.data.datasets[0].data.push(csvRows[i]['Tension_N']);
+                chart.data.datasets[1].data.push(csvRows[i]['Pitch_deg']);
+                chart.data.datasets[2].data.push(csvRows[i]['Line_Length_m']);
+            }
+            chart.update('none');
+        }
+        // Recalculate dive detector from beginning to scrubbed position
+        resetDiveDetector();
+        for (let i = 0; i <= playbackIndex && i < csvRows.length; i++) {
+            updateDiveDetector(csvRows[i]);
+        }
+        updateDashboard(csvRows[playbackIndex]);
+        renderDiveDetectorUI();
+    });
+
+    // File input handler
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            csvRows = parseCSV(evt.target.result);
+            resetPlayback();
+            const playhead = document.getElementById('playhead');
+            const togglePlayBtn = document.getElementById('togglePlayBtn');
+            if (csvRows.length) {
+                updateDashboardFull(csvRows[0]);
+                updateChart(csvRows[0]);
+                togglePlayBtn.disabled = false;
+                playhead.disabled = false;
+                playhead.max = csvRows.length - 1;
+                playhead.value = 0;
+                document.getElementById('playbackStatus').textContent = 'Ready (' + csvRows.length + ' samples)';
+            } else {
+                togglePlayBtn.disabled = true;
+                playhead.disabled = true;
+                playhead.max = 0;
+                playhead.value = 0;
+                document.getElementById('playbackStatus').textContent = 'Invalid or empty CSV';
+            }
+        };
+        reader.readAsText(file);
+    });
+    document.getElementById('togglePlayBtn').addEventListener('click', function() {
+        if (isPlaying) {
+            pause();
+        } else {
+            play();
+        }
+    });
+
+    // 3D view placeholder (Three.js)
+    // 3D view with kite animation
+    let scene, camera, renderer, kiteLine, kiteDot, groundDot;
+    function initThreeJS() {
+        const container = document.getElementById('threeContainer');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x242424);
+        const fs = 4, aspect = container.clientWidth / container.clientHeight;
+        camera = new THREE.OrthographicCamera(fs*aspect/-2, fs*aspect/2, fs/2, fs/-2, 0.1, 1000);
+        camera.position.set(3,3,3); camera.lookAt(0,0,0);
+        renderer = new THREE.WebGLRenderer({ antialias:true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+        // Axes helper and ground circles
+        scene.add(new THREE.AxesHelper(1.2));
+        const createCircle = (radius, color) => {
+            const cp = [];
+            for (let i=0;i<=64;i++){const a=(i/64)*Math.PI*2; cp.push(new THREE.Vector3(radius*Math.cos(a),0,radius*Math.sin(a)));}
+            const cg = new THREE.BufferGeometry(); cg.setFromPoints(cp);
+            scene.add(new THREE.Line(cg, new THREE.LineBasicMaterial({color:color, transparent:true, opacity:0.3})));
+        };
+        createCircle(1, 0xffffff);  // 10m
+        createCircle(2, 0x888888);  // 20m
+        createCircle(3, 0x555555);  // 30m
+        // Kite line and dots
+        const lineGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1)]);
+        kiteLine = new THREE.Line(lineGeom, new THREE.LineBasicMaterial({color:0x5ab5ff, linewidth:3}));
+        scene.add(kiteLine);
+        kiteDot = new THREE.Mesh(new THREE.SphereGeometry(0.03,16,16), new THREE.MeshBasicMaterial({color:0xff0000}));
+        scene.add(kiteDot);
+        groundDot = new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12), new THREE.MeshBasicMaterial({color:0x00ffff}));
+        scene.add(groundDot);
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        animate();
+    }
+
+    // Update kite 3D position from CSV row
+    function updateKite3D(row) {
+        if (!kiteLine || !kiteDot || !groundDot) return;
+        // Use pitch, yaw, line length (convert to 3D position)
+        const pitch = Number(row['Pitch_deg']||0);
+        const yaw = Number(row['Yaw_deg']||0);
+        const ll = Number(row['Line_Length_m']||0);
+        const yr = yaw*Math.PI/180, pr = pitch*Math.PI/180;
+        // Scale: 1 unit = 10m
+        const r = Math.max(0.1, Math.min(ll/10, 2));
+        const x = r*Math.cos(pr)*Math.sin(yr);
+        const y = r*Math.sin(pr);
+        const z = r*Math.cos(pr)*Math.cos(yr);
+        // Update line geometry
+        const pos = kiteLine.geometry.attributes.position;
+        pos.setXYZ(1, x, y, z);
+        pos.needsUpdate = true;
+        kiteDot.position.set(x, y, z);
+        groundDot.position.set(x, 0, z);
+    }
+
+    window.onload = function() {
+        initChart();
+        initThreeJS();
+        document.getElementById('togglePlayBtn').disabled = true;
+        document.getElementById('playhead').disabled = true;
+        setPlayPauseIcon();
+        document.getElementById('playbackStatus').textContent = 'No file loaded';
+    };
+    </script>
+</body>
+</html>

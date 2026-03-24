@@ -391,6 +391,15 @@ void setup() {
     doc["imu"]["yaw_velocity"] = imu.yaw_velocity;
     doc["imu"]["pitch_velocity"] = imu.pitch_velocity;
     
+    // Detectors
+    const DetectorState& detectors = autopilot.getDetectors();
+    doc["detectors"]["dive_confidence"] = detectors.dive_confidence;
+    doc["detectors"]["dive_pitch_rate_threshold"] = DIVE_PITCH_RATE_THRESHOLD;
+    doc["detectors"]["dive_tension_threshold"] = DIVE_TENSION_THRESHOLD;
+    doc["detectors"]["dive_attack_rate"] = DIVE_ATTACK_RATE;
+    doc["detectors"]["dive_decay_rate"] = DIVE_DECAY_RATE;
+    doc["detectors"]["dive_pitch_velocity_alpha"] = DIVE_PITCH_VELOCITY_ALPHA;
+    
     String response;
     serializeJson(doc, response);
     request->send(200, "application/json", response);
@@ -747,6 +756,14 @@ void loop() {
       // Do nothing here - velocity already set by processJoystickInput()
     }
     // Otherwise: keep last commanded_velocity (don't zero it out!)
+    
+    // Update detectors (always run regardless of autopilot state)
+    if (motorResponseReceived) {
+      const auto& det_result = moteus.last_result().values;
+      float det_tension = fabs(det_result.torque) / SPOOL_RADIUS_M;
+      float det_dt = MOTION_INTERVAL / 1000.0;
+      autopilot.updateDetectors(imu.pitch, imu.pitch_velocity, det_tension, det_dt);
+    }
     
     applySafetyLimits();
     sendMotorCommand();

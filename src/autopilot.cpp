@@ -177,3 +177,40 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
 
   return _current_velocity_rps;
 }
+
+// ===== Detectors =====
+
+void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float tension_n, float dt) {
+  // Filter pitch velocity with EMA for smoother detection
+  if (_filtered_pitch_velocity == 0.0f) {
+    _filtered_pitch_velocity = pitch_velocity_dps;
+  } else {
+    _filtered_pitch_velocity += _pitch_velocity_alpha * (pitch_velocity_dps - _filtered_pitch_velocity);
+  }
+
+  // Dive detection: pitch dropping consistently AND high tension
+  bool pitch_dropping = _filtered_pitch_velocity < _dive_pitch_rate_threshold;
+  bool high_tension = tension_n > _dive_tension_threshold;
+
+  if (pitch_dropping && high_tension) {
+    // Attack: increase dive confidence
+    _detectors.dive_confidence += _dive_attack_rate * dt;
+    if (_detectors.dive_confidence > 1.0f) {
+      _detectors.dive_confidence = 1.0f;
+    }
+  } else {
+    // Decay: decrease dive confidence
+    _detectors.dive_confidence -= _dive_decay_rate * dt;
+    if (_detectors.dive_confidence < 0.0f) {
+      _detectors.dive_confidence = 0.0f;
+    }
+  }
+}
+
+void Autopilot::setDiveDetectorParams(float pitch_rate_threshold, float tension_threshold,
+                                       float attack_rate, float decay_rate) {
+  _dive_pitch_rate_threshold = pitch_rate_threshold;
+  _dive_tension_threshold = tension_threshold;
+  _dive_attack_rate = attack_rate;
+  _dive_decay_rate = decay_rate;
+}

@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CclipPath id='c'%3E%3Ccircle cx='16' cy='16' r='16'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='32' height='32' fill='%235ab5ff'/%3E%3Cpolygon points='0,0 32,0 0,32' fill='white'/%3E%3C/g%3E%3C/svg%3E">
     <title>RFx Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -73,6 +74,18 @@
                 <div class="card">
                     <h3>Line Tension</h3>
                     <div class="value" id="lineTension" style="text-align: right;">0.0 N</div>
+                </div>
+                <div class="card">
+                    <h3>Detectors</h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">Dive:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="diveConfidenceBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="diveConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -493,6 +506,25 @@ function updateCards(data) {
         document.getElementById('apDecel').textContent      = formatValue(data.autopilot.decel, 3, 1, false);
         document.getElementById('apDeadband').textContent   = formatValue(data.autopilot.deadband, 4, 3, false);
         document.getElementById('apSlackRange').textContent = formatValue(smt,5,1,false)+'-'+formatValue(sxt,5,1,false)+' N';
+    }
+    
+    // Update detectors
+    if (data.detectors) {
+        const diveConf = data.detectors.dive_confidence || 0;
+        const pct = Math.round(diveConf * 100);
+        document.getElementById('diveConfidenceValue').textContent = pct + '%';
+        const bar = document.getElementById('diveConfidenceBar');
+        bar.style.width = pct + '%';
+        // Color: green -> yellow -> orange -> red as confidence increases
+        if (diveConf < 0.3) {
+            bar.style.backgroundColor = '#4CAF50';  // green
+        } else if (diveConf < 0.6) {
+            bar.style.backgroundColor = '#FFC107';  // yellow
+        } else if (diveConf < 0.8) {
+            bar.style.backgroundColor = '#FF9800';  // orange
+        } else {
+            bar.style.backgroundColor = '#f44336';  // red
+        }
     }
 }
 
