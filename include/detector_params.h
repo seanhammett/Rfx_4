@@ -12,4 +12,10 @@
 #define DIVE_DECAY_RATE             1.0f   // /s    — confidence fall rate when not diving
 #define DIVE_PITCH_VELOCITY_ALPHA   0.15f  // EMA smoothing factor for pitch velocity
 
+// Away-from-wind detector
+#define AWW_ANGLE_THRESHOLD        90.0f   // deg   — yaw offset from wind beyond this triggers detection
+#define AWW_ATTACK_RATE             2.0f   // /s    — confidence rise rate when away from wind
+#define AWW_DECAY_RATE              1.0f   // /s    — confidence fall rate when facing wind
+#define AWW_WIND_ALPHA              0.005f // EMA smoothing for prevailing wind estimate (small = slower)
+
 #endif // DETECTOR_PARAMS_H

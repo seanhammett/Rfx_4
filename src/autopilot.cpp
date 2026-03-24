@@ -180,7 +180,9 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
 
 // ===== Detectors =====
 
-void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float tension_n, float dt) {
+void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float dt) {
+  // --- Dive detector ---
+
   // Filter pitch velocity with EMA for smoother detection
   if (_filtered_pitch_velocity == 0.0f) {
     _filtered_pitch_velocity = pitch_velocity_dps;
@@ -193,17 +195,45 @@ void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float
   bool high_tension = tension_n > _dive_tension_threshold;
 
   if (pitch_dropping && high_tension) {
-    // Attack: increase dive confidence
     _detectors.dive_confidence += _dive_attack_rate * dt;
-    if (_detectors.dive_confidence > 1.0f) {
-      _detectors.dive_confidence = 1.0f;
-    }
+    if (_detectors.dive_confidence > 1.0f) _detectors.dive_confidence = 1.0f;
   } else {
-    // Decay: decrease dive confidence
     _detectors.dive_confidence -= _dive_decay_rate * dt;
-    if (_detectors.dive_confidence < 0.0f) {
-      _detectors.dive_confidence = 0.0f;
-    }
+    if (_detectors.dive_confidence < 0.0f) _detectors.dive_confidence = 0.0f;
+  }
+
+  // --- Away-from-wind detector ---
+
+  // Update prevailing wind estimate using circular EMA (sin/cos components)
+  float yaw_rad = yaw_deg * (PI / 180.0f);
+  float sin_yaw = sinf(yaw_rad);
+  float cos_yaw = cosf(yaw_rad);
+
+  if (!_wind_initialized) {
+    _wind_sin_avg = sin_yaw;
+    _wind_cos_avg = cos_yaw;
+    _wind_initialized = true;
+  } else {
+    _wind_sin_avg += _aww_wind_alpha * (sin_yaw - _wind_sin_avg);
+    _wind_cos_avg += _aww_wind_alpha * (cos_yaw - _wind_cos_avg);
+  }
+
+  float wind_dir_rad = atan2f(_wind_sin_avg, _wind_cos_avg);
+  _detectors.wind_direction_deg = wind_dir_rad * (180.0f / PI);
+
+  // Angular offset from wind (shortest arc, -180 to +180)
+  float offset = yaw_deg - _detectors.wind_direction_deg;
+  // Normalize to [-180, 180]
+  while (offset > 180.0f) offset -= 360.0f;
+  while (offset < -180.0f) offset += 360.0f;
+  _detectors.aww_angle_offset_deg = offset;
+
+  if (fabsf(offset) > _aww_angle_threshold) {
+    _detectors.aww_confidence += _aww_attack_rate * dt;
+    if (_detectors.aww_confidence > 1.0f) _detectors.aww_confidence = 1.0f;
+  } else {
+    _detectors.aww_confidence -= _aww_decay_rate * dt;
+    if (_detectors.aww_confidence < 0.0f) _detectors.aww_confidence = 0.0f;
   }
 }
 
@@ -213,4 +243,12 @@ void Autopilot::setDiveDetectorParams(float pitch_rate_threshold, float tension_
   _dive_tension_threshold = tension_threshold;
   _dive_attack_rate = attack_rate;
   _dive_decay_rate = decay_rate;
+}
+
+void Autopilot::setAwwDetectorParams(float angle_threshold_deg, float attack_rate,
+                                      float decay_rate, float wind_alpha) {
+  _aww_angle_threshold = angle_threshold_deg;
+  _aww_attack_rate = attack_rate;
+  _aww_decay_rate = decay_rate;
+  _aww_wind_alpha = wind_alpha;
 }

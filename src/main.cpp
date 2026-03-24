@@ -399,6 +399,13 @@ void setup() {
     doc["detectors"]["dive_attack_rate"] = DIVE_ATTACK_RATE;
     doc["detectors"]["dive_decay_rate"] = DIVE_DECAY_RATE;
     doc["detectors"]["dive_pitch_velocity_alpha"] = DIVE_PITCH_VELOCITY_ALPHA;
+    doc["detectors"]["aww_confidence"] = detectors.aww_confidence;
+    doc["detectors"]["aww_wind_direction"] = detectors.wind_direction_deg;
+    doc["detectors"]["aww_angle_offset"] = detectors.aww_angle_offset_deg;
+    doc["detectors"]["aww_angle_threshold"] = AWW_ANGLE_THRESHOLD;
+    doc["detectors"]["aww_attack_rate"] = AWW_ATTACK_RATE;
+    doc["detectors"]["aww_decay_rate"] = AWW_DECAY_RATE;
+    doc["detectors"]["aww_wind_alpha"] = AWW_WIND_ALPHA;
     
     String response;
     serializeJson(doc, response);
@@ -762,7 +769,7 @@ void loop() {
       const auto& det_result = moteus.last_result().values;
       float det_tension = fabs(det_result.torque) / SPOOL_RADIUS_M;
       float det_dt = MOTION_INTERVAL / 1000.0;
-      autopilot.updateDetectors(imu.pitch, imu.pitch_velocity, det_tension, det_dt);
+      autopilot.updateDetectors(imu.pitch, imu.pitch_velocity, imu.yaw, det_tension, det_dt);
     }
     
     applySafetyLimits();

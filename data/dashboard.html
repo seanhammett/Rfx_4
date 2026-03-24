@@ -85,6 +85,13 @@
                             </div>
                             <span id="diveConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">AWW:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="awwConfidenceBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="awwConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -151,7 +158,7 @@
 // ============================================================
 //  Wind Direction Rolling Average
 // ============================================================
-const WIND_DIRECTION_SAMPLES = 500;  // Many samples for slow update
+const WIND_DIRECTION_SAMPLES = 300;  // Rolling average window size
 
 function normalizeAngle(angle) {
     let normalized = angle % 360;
@@ -511,19 +518,33 @@ function updateCards(data) {
     // Update detectors
     if (data.detectors) {
         const diveConf = data.detectors.dive_confidence || 0;
-        const pct = Math.round(diveConf * 100);
-        document.getElementById('diveConfidenceValue').textContent = pct + '%';
-        const bar = document.getElementById('diveConfidenceBar');
-        bar.style.width = pct + '%';
-        // Color: green -> yellow -> orange -> red as confidence increases
+        const divePct = Math.round(diveConf * 100);
+        document.getElementById('diveConfidenceValue').textContent = divePct + '%';
+        const diveBar = document.getElementById('diveConfidenceBar');
+        diveBar.style.width = divePct + '%';
         if (diveConf < 0.3) {
-            bar.style.backgroundColor = '#4CAF50';  // green
+            diveBar.style.backgroundColor = '#4CAF50';
         } else if (diveConf < 0.6) {
-            bar.style.backgroundColor = '#FFC107';  // yellow
+            diveBar.style.backgroundColor = '#FFC107';
         } else if (diveConf < 0.8) {
-            bar.style.backgroundColor = '#FF9800';  // orange
+            diveBar.style.backgroundColor = '#FF9800';
         } else {
-            bar.style.backgroundColor = '#f44336';  // red
+            diveBar.style.backgroundColor = '#f44336';
+        }
+
+        const awwConf = data.detectors.aww_confidence || 0;
+        const awwPct = Math.round(awwConf * 100);
+        document.getElementById('awwConfidenceValue').textContent = awwPct + '%';
+        const awwBar = document.getElementById('awwConfidenceBar');
+        awwBar.style.width = awwPct + '%';
+        if (awwConf < 0.3) {
+            awwBar.style.backgroundColor = '#4CAF50';
+        } else if (awwConf < 0.6) {
+            awwBar.style.backgroundColor = '#FFC107';
+        } else if (awwConf < 0.8) {
+            awwBar.style.backgroundColor = '#FF9800';
+        } else {
+            awwBar.style.backgroundColor = '#f44336';
         }
     }
 }

@@ -7,7 +7,9 @@
 // ===== Detector Results =====
 struct DetectorState {
   float dive_confidence = 0.0f;      // 0.0 - 1.0: confidence that kite is diving
-  // Future detectors can be added here
+  float aww_confidence = 0.0f;       // 0.0 - 1.0: confidence that kite is away from wind
+  float wind_direction_deg = 0.0f;   // estimated prevailing wind direction (degrees)
+  float aww_angle_offset_deg = 0.0f; // current angular offset from wind (degrees)
 };
 
 class Autopilot {
@@ -47,12 +49,14 @@ public:
 
   // ===== Detectors =====
   // Call updateDetectors() each cycle with IMU data, independent of autopilot enable state
-  void updateDetectors(float pitch_deg, float pitch_velocity_dps, float tension_n, float dt);
+  void updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float dt);
   const DetectorState& getDetectors() const { return _detectors; }
   
   // Detector configuration
   void setDiveDetectorParams(float pitch_rate_threshold_dps, float tension_threshold_n, 
                               float attack_rate, float decay_rate);
+  void setAwwDetectorParams(float angle_threshold_deg, float attack_rate, float decay_rate,
+                            float wind_alpha);
 
 private:
   bool _enabled = false;
@@ -99,6 +103,15 @@ private:
   float _dive_decay_rate = DIVE_DECAY_RATE;
   float _filtered_pitch_velocity = 0.0f;
   float _pitch_velocity_alpha = DIVE_PITCH_VELOCITY_ALPHA;
+
+  // Away-from-wind detector parameters (defaults from detector_params.h)
+  float _aww_angle_threshold = AWW_ANGLE_THRESHOLD;
+  float _aww_attack_rate = AWW_ATTACK_RATE;
+  float _aww_decay_rate = AWW_DECAY_RATE;
+  float _aww_wind_alpha = AWW_WIND_ALPHA;
+  float _wind_sin_avg = 0.0f;   // EMA of sin(yaw) for circular mean
+  float _wind_cos_avg = 0.0f;   // EMA of cos(yaw) for circular mean
+  bool  _wind_initialized = false;
 };
 
 #endif // AUTOPILOT_H

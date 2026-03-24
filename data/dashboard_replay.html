@@ -162,6 +162,13 @@
                             </div>
                             <span id="diveConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">AWW:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="awwConfidenceBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="awwConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -226,6 +233,45 @@
     let prevPitchDeg = null;
     let prevTimestampMs = null;
 
+    // --- AWW Detector State ---
+    let awwConfidence = 0;
+    let windSinAvg = 0;
+    let windCosAvg = 0;
+    let windInitialized = false;
+    let awwPrevTimestampMs = null;
+
+    // --- Wind Direction Rolling Average ---
+    const WIND_DIRECTION_SAMPLES = 300;
+    let windYawBuffer = [];
+    let windYawBufferIndex = 0;
+
+    function addWindYawSample(yaw) {
+        if (windYawBuffer.length < WIND_DIRECTION_SAMPLES) {
+            windYawBuffer.push(yaw);
+        } else {
+            windYawBuffer[windYawBufferIndex] = yaw;
+            windYawBufferIndex = (windYawBufferIndex + 1) % WIND_DIRECTION_SAMPLES;
+        }
+    }
+
+    function getWindDirection() {
+        if (windYawBuffer.length === 0) return 0;
+        let sinSum = 0, cosSum = 0;
+        for (let i = 0; i < windYawBuffer.length; i++) {
+            const rad = windYawBuffer[i] * Math.PI / 180;
+            sinSum += Math.sin(rad);
+            cosSum += Math.cos(rad);
+        }
+        let meanDeg = Math.atan2(sinSum / windYawBuffer.length, cosSum / windYawBuffer.length) * 180 / Math.PI;
+        if (meanDeg < 0) meanDeg += 360;
+        return meanDeg;
+    }
+
+    function resetWindBuffer() {
+        windYawBuffer = [];
+        windYawBufferIndex = 0;
+    }
+
     // Detector parameters — loaded from firmware /status endpoint.
     // Defaults here match include/detector_params.h; overwritten on successful fetch.
     let PITCH_VELOCITY_ALPHA = 0.15;
@@ -233,6 +279,12 @@
     let DIVE_TENSION_THRESHOLD = 0.8;
     let DIVE_ATTACK_RATE = 2.0;
     let DIVE_DECAY_RATE = 1.0;
+
+    // AWW detector parameters — defaults match include/detector_params.h
+    let AWW_ANGLE_THRESHOLD = 90.0;
+    let AWW_ATTACK_RATE = 2.0;
+    let AWW_DECAY_RATE = 1.0;
+    let AWW_WIND_ALPHA = 0.005;
 
     // Try to load detector params from the ESP32 that served this page.
     // Skip the fetch if running standalone (file:// or localhost) — defaults are fine there.
@@ -266,6 +318,10 @@
                 if (d.dive_attack_rate !== undefined)          DIVE_ATTACK_RATE = d.dive_attack_rate;
                 if (d.dive_decay_rate !== undefined)           DIVE_DECAY_RATE = d.dive_decay_rate;
                 if (d.dive_pitch_velocity_alpha !== undefined) PITCH_VELOCITY_ALPHA = d.dive_pitch_velocity_alpha;
+                if (d.aww_angle_threshold !== undefined)       AWW_ANGLE_THRESHOLD = d.aww_angle_threshold;
+                if (d.aww_attack_rate !== undefined)           AWW_ATTACK_RATE = d.aww_attack_rate;
+                if (d.aww_decay_rate !== undefined)            AWW_DECAY_RATE = d.aww_decay_rate;
+                if (d.aww_wind_alpha !== undefined)            AWW_WIND_ALPHA = d.aww_wind_alpha;
                 statusEl.textContent = 'params: from firmware';
                 statusEl.style.color = '#4CAF50';
                 statusEl.style.borderColor = '#4CAF50';
@@ -413,6 +469,70 @@
         prevTimestampMs = null;
     }
 
+    // Compute-only AWW detector update (no DOM touches)
+    function updateAwwDetector(row) {
+        const yaw = row['Yaw_deg'];
+        const timestamp = row['Timestamp_ms'];
+        let dt_s = 0.033;
+        if (awwPrevTimestampMs !== null && timestamp > awwPrevTimestampMs) {
+            dt_s = (timestamp - awwPrevTimestampMs) / 1000.0;
+            if (dt_s > 0.5) dt_s = 0.5;
+        }
+        awwPrevTimestampMs = timestamp;
+
+        const yawRad = yaw * Math.PI / 180.0;
+        const sinYaw = Math.sin(yawRad);
+        const cosYaw = Math.cos(yawRad);
+
+        if (!windInitialized) {
+            windSinAvg = sinYaw;
+            windCosAvg = cosYaw;
+            windInitialized = true;
+        } else {
+            windSinAvg += AWW_WIND_ALPHA * (sinYaw - windSinAvg);
+            windCosAvg += AWW_WIND_ALPHA * (cosYaw - windCosAvg);
+        }
+
+        const windDirDeg = Math.atan2(windSinAvg, windCosAvg) * 180.0 / Math.PI;
+        let offset = yaw - windDirDeg;
+        while (offset > 180) offset -= 360;
+        while (offset < -180) offset += 360;
+
+        if (Math.abs(offset) > AWW_ANGLE_THRESHOLD) {
+            awwConfidence += AWW_ATTACK_RATE * dt_s;
+            if (awwConfidence > 1.0) awwConfidence = 1.0;
+        } else {
+            awwConfidence -= AWW_DECAY_RATE * dt_s;
+            if (awwConfidence < 0.0) awwConfidence = 0.0;
+        }
+    }
+
+    // Render current AWW confidence to the DOM
+    function renderAwwDetectorUI() {
+        const pct = Math.round(awwConfidence * 100);
+        setText('awwConfidenceValue', pct + '%');
+        const bar = document.getElementById('awwConfidenceBar');
+        bar.style.width = pct + '%';
+        if (awwConfidence < 0.3) {
+            bar.style.backgroundColor = '#4CAF50';
+        } else if (awwConfidence < 0.6) {
+            bar.style.backgroundColor = '#FFC107';
+        } else if (awwConfidence < 0.8) {
+            bar.style.backgroundColor = '#FF9800';
+        } else {
+            bar.style.backgroundColor = '#f44336';
+        }
+    }
+
+    // Reset AWW detector state
+    function resetAwwDetector() {
+        awwConfidence = 0;
+        windSinAvg = 0;
+        windCosAvg = 0;
+        windInitialized = false;
+        awwPrevTimestampMs = null;
+    }
+
     // Update dashboard UI from a CSV row (values are pre-parsed numerics)
     function updateDashboard(row) {
         setText('joystickInput', formatValue(row['Remote_Joy'], 4, 0, true));
@@ -435,9 +555,11 @@
         setText('apDecel', '—');
         setText('apDeadband', '—');
         setText('apSlackRange', '—');
-        // Wind direction (use yaw)
-        setText('windDirection', formatValue(row['Yaw_deg'], 6, 1, false) + '\u00b0');
-        setText('windDirectionSamples', playbackIndex + ' samples');
+        // Wind direction (rolling average)
+        addWindYawSample(row['Yaw_deg']);
+        const windDir = getWindDirection();
+        setText('windDirection', formatValue(windDir, 6, 1, false) + '\u00b0');
+        setText('windDirectionSamples', Math.min(windYawBuffer.length, WIND_DIRECTION_SAMPLES) + ' samples');
         // Playback date/time
         setText('playbackDate', row['Date'] || '—');
         setText('playbackTime', row['Time'] || '—');
@@ -448,8 +570,10 @@
     // Dashboard + dive detector + UI render (used by non-playback callers)
     function updateDashboardFull(row) {
         updateDiveDetector(row);
+        updateAwwDetector(row);
         updateDashboard(row);
         renderDiveDetectorUI();
+        renderAwwDetectorUI();
     }
 
     // Append data to chart arrays (fast — no rendering)
@@ -563,6 +687,7 @@
                 // Push data for all rows in the batch (fast, no rendering)
                 for (let i = batchStart; i < playbackIndex; i++) {
                     updateDiveDetector(csvRows[i]);
+                    updateAwwDetector(csvRows[i]);
                     appendChartData(csvRows[i]);
                 }
                 trimChartData();
@@ -570,6 +695,7 @@
                 const lastRow = csvRows[playbackIndex - 1];
                 updateDashboard(lastRow);
                 renderDiveDetectorUI();
+                renderAwwDetectorUI();
                 flushChart();
 
                 let skippedThisFrame = Math.max(0, batchSize - 1);
@@ -616,6 +742,8 @@
         }
         document.getElementById('playhead').value = 0;
         resetDiveDetector();
+        resetAwwDetector();
+        resetWindBuffer();
     }
 
     // Playhead (scrubbing) logic
@@ -626,6 +754,8 @@
         // Recalculate dive detector from beginning in one pass,
         // and collect chart data for the last chartMaxPoints rows
         resetDiveDetector();
+        resetAwwDetector();
+        resetWindBuffer();
         chart.data.labels = [];
         chart.data.datasets.forEach(ds => ds.data = []);
         cacheChartArrays();
@@ -634,10 +764,14 @@
         // Advance detector state up to chartStart (no chart data needed)
         for (let i = 0; i < chartStart && i < csvRows.length; i++) {
             updateDiveDetector(csvRows[i]);
+            updateAwwDetector(csvRows[i]);
+            addWindYawSample(csvRows[i]['Yaw_deg']);
         }
         // From chartStart onward: update detector AND push chart data
         for (let i = chartStart; i <= playbackIndex && i < csvRows.length; i++) {
             updateDiveDetector(csvRows[i]);
+            updateAwwDetector(csvRows[i]);
+            addWindYawSample(csvRows[i]['Yaw_deg']);
             const row = csvRows[i];
             cLabels.push('');
             cD0.push(row['Tension_N']);
@@ -652,6 +786,7 @@
         chart.update('none');
         updateDashboard(csvRows[playbackIndex]);
         renderDiveDetectorUI();
+        renderAwwDetectorUI();
     });
 
     // File input handler
