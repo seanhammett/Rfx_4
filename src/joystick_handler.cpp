@@ -5,6 +5,7 @@ JoystickController::JoystickController(uint8_t x_pin, uint8_t y_pin, uint8_t sw_
     x_filtered(0), y_filtered(0), x_raw(0), y_raw(0),
     x(0), y(0), motor_command(0),
     switch_pressed(false), in_use(false), last_use_time(0),
+    invert_x(false), invert_y(false),
     filter_alpha(0.7),
     y_center_lower(1900), y_center_upper(2100),
     x_center_lower(1900), x_center_upper(2100),
@@ -22,6 +23,8 @@ void JoystickController::update() {
   // Read raw values
   x_raw = analogRead(pin_x);
   y_raw = analogRead(pin_y);
+  if (invert_x) x_raw = 4095 - x_raw;
+  if (invert_y) y_raw = 4095 - y_raw;
   
   // Apply low-pass filter for smooth response
   x_filtered = filter_alpha * x_filtered + (1.0 - filter_alpha) * x_raw;
@@ -91,4 +94,9 @@ void JoystickController::setFilterAlpha(float alpha) {
 
 void JoystickController::setIdleTimeout(unsigned long timeout_ms) {
   idle_timeout = timeout_ms;
+}
+
+void JoystickController::setInvert(bool invertX, bool invertY) {
+  invert_x = invertX;
+  invert_y = invertY;
 }

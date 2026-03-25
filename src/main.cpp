@@ -50,8 +50,8 @@ IMUHandler imu;
 Autopilot autopilot;
 
 // ===== Kite Identity =====
-const char* KITE_ID    = "Kite-1";    // Unique name — change per kite
-const char* KITE_COLOR = "#5ab5ff";   // Dashboard display colour
+const char* KITE_ID    = "Kite-2";    // Unique name — change per kite
+const char* KITE_COLOR = "#ffa807";   // Dashboard display colour
 
 // ===== WiFi Configuration =====
 const char* WIFI_SSID = "iPhone 123";

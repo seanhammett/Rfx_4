@@ -35,6 +35,7 @@ public:
   void setSpeedLimits(int min_speed, int max_speed);
   void setFilterAlpha(float alpha);
   void setIdleTimeout(unsigned long timeout_ms);
+  void setInvert(bool invertX, bool invertY);
   
 private:
   // Pin assignments
@@ -55,6 +56,8 @@ private:
   unsigned long last_use_time;
   
   // Configuration
+  bool invert_x;
+  bool invert_y;
   float filter_alpha;
   int y_center_lower;
   int y_center_upper;

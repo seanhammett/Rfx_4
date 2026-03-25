@@ -9,27 +9,45 @@
 #include "joystick_handler.h"
 
 // =================== PINS ===================
-// Joystick - ESP32-S3 compatible pins (avoid strapping pins 0, 1, 2)
-// easiest pins on loose wire setup
-#define JOYSTICK_X_PIN    4
-#define JOYSTICK_Y_PIN    5
-#define JOYSTICK_SW_PIN   10
-//// option 1 - CHECKED
-// #define JOYSTICK_X_PIN    6
-// #define JOYSTICK_Y_PIN    7
-// #define JOYSTICK_SW_PIN   39
-// // option 2 - CHECKED
-// #define JOYSTICK_X_PIN    4
-// #define JOYSTICK_Y_PIN    5
-// #define JOYSTICK_SW_PIN   40
-// // option 3 - CHECKED
-// #define JOYSTICK_X_PIN    12   
-// #define JOYSTICK_Y_PIN    10
-// #define JOYSTICK_SW_PIN   41
-// // option 4 - CHECKED
-// #define JOYSTICK_X_PIN    13
-// #define JOYSTICK_Y_PIN    11
-// #define JOYSTICK_SW_PIN   42
+// Set ACTIVE_JOYSTICK to 1, 2, 3, or 4 to select which unit is connected.
+// Pin options and calibrated deadbands are defined below.
+#define ACTIVE_JOYSTICK  1
+
+#if ACTIVE_JOYSTICK == 1
+  #define JOYSTICK_X_PIN    6
+  #define JOYSTICK_Y_PIN    7
+  #define JOYSTICK_SW_PIN   39
+  #define DZ_Y_LOWER  2079
+  #define DZ_Y_UPPER  2143
+  #define DZ_X_LOWER  2063
+  #define DZ_X_UPPER  2124
+#elif ACTIVE_JOYSTICK == 2
+  #define JOYSTICK_X_PIN    4
+  #define JOYSTICK_Y_PIN    5
+  #define JOYSTICK_SW_PIN   40
+  #define DZ_Y_LOWER  2055
+  #define DZ_Y_UPPER  2113
+  #define DZ_X_LOWER  2078
+  #define DZ_X_UPPER  2137
+#elif ACTIVE_JOYSTICK == 3
+  #define JOYSTICK_X_PIN    12
+  #define JOYSTICK_Y_PIN    10
+  #define JOYSTICK_SW_PIN   41
+  #define DZ_Y_LOWER  2104
+  #define DZ_Y_UPPER  2160
+  #define DZ_X_LOWER  2053
+  #define DZ_X_UPPER  2111
+#elif ACTIVE_JOYSTICK == 4
+  #define JOYSTICK_X_PIN    13
+  #define JOYSTICK_Y_PIN    11
+  #define JOYSTICK_SW_PIN   42
+  #define DZ_Y_LOWER  2097
+  #define DZ_Y_UPPER  2161
+  #define DZ_X_LOWER  2046
+  #define DZ_X_UPPER  2101
+#else
+  #error "ACTIVE_JOYSTICK must be 1, 2, 3, or 4"
+#endif
 
 // =================== CONFIG ===================
 const char* WIFI_SSID = "iPhone 123";
@@ -104,7 +122,8 @@ void setup() {
   
   // Initialize joystick
   joystick.begin();
-  joystick.setDeadzone(1900, 2200, 1900, 2200);
+  joystick.setDeadzone(DZ_Y_LOWER, DZ_Y_UPPER, DZ_X_LOWER, DZ_X_UPPER);
+  joystick.setInvert(true, true);  // Board has X and Y sense inverted
   joystick.setSpeedLimits(-1000, 1000);  // Match main system: ±1000 maps to ±MAX_VELOCITY_RPS
   joystick.setFilterAlpha(0.7);
   Serial.println("Joystick configured!");
