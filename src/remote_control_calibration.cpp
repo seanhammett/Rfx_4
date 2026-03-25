@@ -134,8 +134,8 @@ void setup() {
 
     int x_range = maxs[xi] - mins[xi];
     int y_range = maxs[yi] - mins[yi];
-    int x_margin = max(x_range / 8, 25);  // at least 25 counts
-    int y_margin = max(y_range / 8, 25);
+    int x_margin = max(x_range / 8, 32);  // at least 25 counts
+    int y_margin = max(y_range / 8, 32);
 
     int x_lower = mins[xi] - x_margin;
     int x_upper = maxs[xi] + x_margin;

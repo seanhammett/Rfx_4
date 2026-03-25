@@ -7,289 +7,354 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include "joystick_handler.h"
+#include "fleet_protocol.h"
 
-// =================== PINS ===================
-// Set ACTIVE_JOYSTICK to 1, 2, 3, or 4 to select which unit is connected.
-// Pin options and calibrated deadbands are defined below.
-#define ACTIVE_JOYSTICK  1
+// =================== JOYSTICK CONFIGURATION ===================
+// All 4 joysticks — pins and calibrated deadbands.
+// Joystick index 0-3 maps to kite_id 1-4.
+struct JoystickConfig {
+  uint8_t x_pin, y_pin, sw_pin;
+  int dz_y_lower, dz_y_upper, dz_x_lower, dz_x_upper;
+};
 
-#if ACTIVE_JOYSTICK == 1
-  #define JOYSTICK_X_PIN    6
-  #define JOYSTICK_Y_PIN    7
-  #define JOYSTICK_SW_PIN   39
-  #define DZ_Y_LOWER  2079
-  #define DZ_Y_UPPER  2143
-  #define DZ_X_LOWER  2063
-  #define DZ_X_UPPER  2124
-  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // MAC: 3C:84:27:FC:C8:9C (rfx-4 board 1)
-#elif ACTIVE_JOYSTICK == 2
-  #define JOYSTICK_X_PIN    4
-  #define JOYSTICK_Y_PIN    5
-  #define JOYSTICK_SW_PIN   40
-  #define DZ_Y_LOWER  2055
-  #define DZ_Y_UPPER  2113
-  #define DZ_X_LOWER  2078
-  #define DZ_X_UPPER  2137
-  #define RECEIVER_MAC  {0xE4, 0xB0, 0x63, 0xAE, 0x7B, 0x28}  // MAC: E4:B0:63:AE:7B:28 (rfx-4 board 2)
-#elif ACTIVE_JOYSTICK == 3
-  #define JOYSTICK_X_PIN    12
-  #define JOYSTICK_Y_PIN    10
-  #define JOYSTICK_SW_PIN   41
-  #define DZ_Y_LOWER  2104
-  #define DZ_Y_UPPER  2160
-  #define DZ_X_LOWER  2053
-  #define DZ_X_UPPER  2111
-  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // TODO: update with board 3 MAC
-#elif ACTIVE_JOYSTICK == 4
-  #define JOYSTICK_X_PIN    13
-  #define JOYSTICK_Y_PIN    11
-  #define JOYSTICK_SW_PIN   42
-  #define DZ_Y_LOWER  2097
-  #define DZ_Y_UPPER  2161
-  #define DZ_X_LOWER  2046
-  #define DZ_X_UPPER  2101
-  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // TODO: update with board 4 MAC
-#else
-  #error "ACTIVE_JOYSTICK must be 1, 2, 3, or 4"
-#endif
+static const JoystickConfig JS_CONFIG[MAX_KITES] = {
+  {  6,  7, 39,  2068, 2156, 2051, 2144 },  // Joystick 1 → Kite 1
+  {  4,  5, 40,  2037, 2136, 2066, 2157 },  // Joystick 2 → Kite 2
+  { 12, 10, 41,  2087, 2176, 2044, 2119 },  // Joystick 3 → Kite 3
+  { 13, 11, 42,  2087, 2166, 2036, 2115 },  // Joystick 4 → Kite 4
+};
 
 // =================== CONFIG ===================
 const char* WIFI_SSID = "iPhone 123";
 const char* WIFI_PASS = "sonoma1991";
 
-// MAC address of the target rfx-4 main board — set per joystick in the #if block above.
-uint8_t receiverMAC[] = RECEIVER_MAC;
+// =================== PER-JOYSTICK STATE ===================
+struct JoystickSlot {
+  JoystickController* controller;
+  uint8_t targetMAC[6];       // kite this joystick sends to
+  bool assigned;               // true if a kite was matched for this joystick
+  unsigned long lastCommandSent;
+  unsigned long lastActiveTime;
+  unsigned long lastButtonChangeTime;
+  bool prevButton;
+};
+
+JoystickSlot slots[MAX_KITES];   // index 0 = joystick 1 → kite_id 1, etc.
+
+// =================== FLEET STATE ====================
+bool fleetDiscovered = false;
+KiteSlot knownKites[MAX_KITES];
+uint8_t knownFleetSize = 0;
+
+// Roster response received in ISR
+volatile bool rosterReceived = false;
+FleetRosterMsg pendingRoster;
 
 // =================== ESP-NOW DATA STRUCTURE ===================
-typedef struct {
-  int16_t motor_speed;  // Joystick command: -1000 to +1000 range
-  uint8_t command;      // 0=speed, 1=unused, 2=stop
-  uint8_t button;       // Button state (0=released, 1=pressed)
-} ControlMessage;
+FleetControlMsg outgoingMsg;         // 5-byte fleet control message
 
-// =================== STATE ====================
-JoystickController joystick(JOYSTICK_X_PIN, JOYSTICK_Y_PIN, JOYSTICK_SW_PIN);
-
-unsigned long lastCommandSent = 0;
-const unsigned long COMMAND_INTERVAL = 20;  // Send commands every 20ms (50 Hz) - ESP-NOW is fast!
-
-ControlMessage outgoingMsg;
-esp_now_peer_info_t peerInfo;
+const unsigned long COMMAND_INTERVAL = 20;  // 50 Hz per joystick
 
 // =================== ESP-NOW FUNCTIONS ===================
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  // Callback when data is sent
-  static unsigned long lastPrint = 0;
-  unsigned long now = millis();
-  
-  // Print status every 500ms to avoid spam
-  // if (now - lastPrint > 500) {
-  //   if (status == ESP_NOW_SEND_SUCCESS) {
-  //     Serial.println("TX: SUCCESS");
-  //   } else {
-  //     Serial.println("TX: FAILED!");
-  //   }
-  //   lastPrint = now;
-  // }
+  // Callback when data is sent (debug only)
 }
 
-void sendMotorCommand(int speed, bool button_pressed) {
+// Receive callback — handles fleet roster responses from host
+void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+  if (data_len == 0) return;
+  uint8_t msg_type = data[0];
+  if (msg_type == MSG_FLEET_ROSTER && data_len >= sizeof(FleetRosterMsg) && !rosterReceived) {
+    memcpy(&pendingRoster, data, sizeof(FleetRosterMsg));
+    rosterReceived = true;
+  }
+}
+
+void sendMotorCommand(const uint8_t* mac, int speed, bool button_pressed) {
+  outgoingMsg.msg_type = MSG_CONTROL;
   outgoingMsg.motor_speed = speed;
   outgoingMsg.command = 0;  // Velocity command
   outgoingMsg.button = button_pressed ? 1 : 0;
-  esp_now_send(receiverMAC, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
+  esp_now_send(mac, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
 }
 
-void sendStopCommand() {
+void sendStopCommand(const uint8_t* mac) {
+  outgoingMsg.msg_type = MSG_CONTROL;
   outgoingMsg.motor_speed = 0;
   outgoingMsg.command = 2;  // Stop
   outgoingMsg.button = 0;
-  esp_now_send(receiverMAC, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
+  esp_now_send(mac, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
+}
+
+// =================== FLEET DISCOVERY ===================
+// Sends a discover broadcast and assigns any newly-found kites to their slots.
+// Returns the number of newly assigned slots.
+int doFleetDiscovery(int attempts, unsigned long timeout_ms) {
+  rosterReceived = false;
+
+  for (int attempt = 0; attempt < attempts; attempt++) {
+    FleetDiscoverMsg disc = {};
+    disc.msg_type = MSG_REMOTE_DISCOVER;
+    disc.joystick_id = 0;
+    uint8_t broadcast[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    esp_now_send(broadcast, (uint8_t*)&disc, sizeof(disc));
+    Serial.printf("[FLEET] Discover attempt %d/%d...\n", attempt + 1, attempts);
+
+    unsigned long waitStart = millis();
+    while (millis() - waitStart < timeout_ms) {
+      if (rosterReceived) break;
+      delay(50);
+    }
+    if (rosterReceived) break;
+  }
+
+  if (!rosterReceived) {
+    Serial.println("[FLEET] No host responded");
+    return 0;
+  }
+
+  rosterReceived = false;
+  knownFleetSize = pendingRoster.fleet_size;
+  if (knownFleetSize > MAX_KITES) knownFleetSize = MAX_KITES;
+  memcpy(knownKites, pendingRoster.kites, sizeof(KiteSlot) * knownFleetSize);
+  fleetDiscovered = true;
+
+  Serial.printf("[FLEET] Roster: %d kite(s) online", knownFleetSize);
+  for (uint8_t k = 0; k < knownFleetSize; k++) {
+    Serial.printf("  K%d(%02X:%02X:%02X:%02X:%02X:%02X)",
+                  knownKites[k].kite_id,
+                  knownKites[k].mac[0], knownKites[k].mac[1],
+                  knownKites[k].mac[2], knownKites[k].mac[3],
+                  knownKites[k].mac[4], knownKites[k].mac[5]);
+  }
+  Serial.println();
+
+  // Assign each unassigned slot to its matching kite_id
+  int newlyAssigned = 0;
+  for (int j = 0; j < MAX_KITES; j++) {
+    if (slots[j].assigned) continue;
+    uint8_t target_id = j + 1;
+    for (uint8_t k = 0; k < knownFleetSize; k++) {
+      if (knownKites[k].kite_id == target_id) {
+        memcpy(slots[j].targetMAC, knownKites[k].mac, 6);
+        slots[j].assigned = true;
+        newlyAssigned++;
+        if (!esp_now_is_peer_exist(slots[j].targetMAC)) {
+          esp_now_peer_info_t p = {};
+          memcpy(p.peer_addr, slots[j].targetMAC, 6);
+          p.channel = 0;
+          p.encrypt = false;
+          esp_now_add_peer(&p);
+        }
+        Serial.printf("[FLEET] Joystick %d \u2192 Kite %d  %02X:%02X:%02X:%02X:%02X:%02X\n",
+                      j + 1, target_id,
+                      slots[j].targetMAC[0], slots[j].targetMAC[1],
+                      slots[j].targetMAC[2], slots[j].targetMAC[3],
+                      slots[j].targetMAC[4], slots[j].targetMAC[5]);
+        break;
+      }
+    }
+  }
+  return newlyAssigned;
 }
 
 // =================== SETUP ===================
 void setup() {
-  // ESP32-S3 USB CDC serial setup
   Serial.begin(115200);
-  delay(2000);  // Give time for USB CDC to initialize
+  delay(2000);
   
-  Serial.println("\n=== Remote Control Startup ===");
-  
-  // Initialize built-in RGB LED on GPIO2 (off)
+  Serial.println("\n=== Remote Control Startup (Multi-Kite) ===");
   neopixelWrite(2, 0, 0, 0);
   
-  // Configure ADC (ESP32-S3 compatible)
-  analogSetPinAttenuation(JOYSTICK_X_PIN, ADC_11db);
-  analogSetPinAttenuation(JOYSTICK_Y_PIN, ADC_11db);
+  // Initialize all 4 joysticks
+  for (int i = 0; i < MAX_KITES; i++) {
+    const JoystickConfig& cfg = JS_CONFIG[i];
+    analogSetPinAttenuation(cfg.x_pin, ADC_11db);
+    analogSetPinAttenuation(cfg.y_pin, ADC_11db);
+
+    slots[i].controller = new JoystickController(cfg.x_pin, cfg.y_pin, cfg.sw_pin);
+    slots[i].controller->begin();
+    slots[i].controller->setDeadzone(cfg.dz_y_lower, cfg.dz_y_upper, cfg.dz_x_lower, cfg.dz_x_upper);
+    slots[i].controller->setInvert(true, true);
+    slots[i].controller->setSpeedLimits(-1000, 1000);
+    slots[i].controller->setFilterAlpha(0.7);
+
+    memset(slots[i].targetMAC, 0, 6);
+    slots[i].assigned = false;
+    slots[i].lastCommandSent = 0;
+    slots[i].lastActiveTime = 0;
+    slots[i].lastButtonChangeTime = 0;
+    slots[i].prevButton = false;
+
+    Serial.printf("  Joystick %d: X=%d Y=%d SW=%d\n", i + 1, cfg.x_pin, cfg.y_pin, cfg.sw_pin);
+  }
   
-  // Initialize joystick
-  joystick.begin();
-  joystick.setDeadzone(DZ_Y_LOWER, DZ_Y_UPPER, DZ_X_LOWER, DZ_X_UPPER);
-  joystick.setInvert(true, true);  // Board has X and Y sense inverted
-  joystick.setSpeedLimits(-1000, 1000);  // Match main system: ±1000 maps to ±MAX_VELOCITY_RPS
-  joystick.setFilterAlpha(0.7);
-  Serial.println("Joystick configured!");
-  Serial.println("  Range: ±1000 units (matches main system JOYSTICK_MAX)");
-  Serial.println("  Button: Toggle target seeking mode on main system");
-  
-  // Initialize WiFi in STA mode 
+  // Initialize WiFi
   Serial.println("\nInitializing WiFi...");
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  
-  // Wait for WiFi connection (up to 10 seconds)
   unsigned long wifiStartTime = millis();
   while (WiFi.status() != WL_CONNECTED && (millis() - wifiStartTime < 10000)) {
     delay(500);
     Serial.print(".");
   }
   Serial.println();
-  
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("[OK] WiFi connected | Channel: %d\n", WiFi.channel());
   } else {
     Serial.println("[WARNING] WiFi connection timeout (ESP-NOW will use default channel)");
   }
+  Serial.printf("MAC Address: %s\n", WiFi.macAddress().c_str());
   
-  Serial.print("MAC Address: ");
-  Serial.println(WiFi.macAddress());
-  
-  // Initialize ESP-NOW after WiFi is set up
+  // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
+    Serial.println("[ERROR] ESP-NOW init failed");
     return;
   }
   Serial.println("[OK] ESP-NOW initialized!");
-  
-  // Register send callback
   esp_now_register_send_cb(onDataSent);
-  
-  // Use WiFi channel if connected, else default to 0 (auto)
-  int channel = 0;  // 0 = use primary channel (let ESP handle it)
-  if (WiFi.status() == WL_CONNECTED) {
-    channel = WiFi.channel();
+  esp_now_register_recv_cb(onDataReceived);
+
+  // Register broadcast peer for fleet discovery
+  {
+    esp_now_peer_info_t bcast = {};
+    memset(bcast.peer_addr, 0xFF, 6);
+    bcast.channel = 0;
+    bcast.encrypt = false;
+    esp_now_add_peer(&bcast);
   }
-  
-  // Register peer (receiver)
-  memcpy(peerInfo.peer_addr, receiverMAC, 6);
-  peerInfo.channel = channel;  // Sync to WiFi channel if available
-  peerInfo.encrypt = false;
-  
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    // Still try to proceed
+
+  // ===== Fleet Discovery =====
+  Serial.println("\n[FLEET] Starting fleet discovery...");
+  neopixelWrite(2, 0, 0, 50);  // Blue = discovering
+  int assignedCount = doFleetDiscovery(DISCOVER_RETRIES + 1, DISCOVER_TIMEOUT_MS);
+  if (assignedCount > 0) {
+    neopixelWrite(2, 0, 50, 0);   // Green = at least 1 kite found
   } else {
-    Serial.println("Peer added successfully!");
+    neopixelWrite(2, 50, 20, 0);  // Orange = no kites found
   }
-  Serial.print("Sending to MAC: ");
-  for (int i = 0; i < 6; i++) {
-    Serial.printf("%02X", receiverMAC[i]);
-    if (i < 5) Serial.print(":");
-  }
-  Serial.println();
-  
   Serial.println("[OK] Remote control ready!");
-  Serial.println("  - WiFi and ESP-NOW synced to same channel");
-  Serial.println("  - Commands: motor_speed=±1000, button toggles target seeking mode");
 }
 
 // =================== MAIN LOOP ===================
 void loop() {
-  unsigned long loopStart = millis();
-  
-  joystick.update();
-  
-  // Get button state and track changes
-  static bool prev_button_state = false;
-  bool current_switch = joystick.getSwitch();
-  bool button_changed = (current_switch != prev_button_state);
-  prev_button_state = current_switch;
-  
-  // Send motor commands with 100ms zero-command period after release
-  static unsigned long lastJoystickActiveTime = 0;
-  static unsigned long lastButtonChangeTime = 0;
   unsigned long now = millis();
-  bool commandSentThisLoop = false;
-  int commandSent = 0;
-  
-  // Default LED off; will be turned on if we send data
-  neopixelWrite(2, 0, 0, 0);
-  
-  // Track button changes
-  if (button_changed) {
-    lastButtonChangeTime = now;
+
+  // Update and send for each joystick (only slots with a connected kite)
+  for (int i = 0; i < MAX_KITES; i++) {
+    JoystickSlot& s = slots[i];
+    if (!s.assigned) continue;
+    JoystickController& js = *s.controller;
+    js.update();
+
+    bool current_switch = js.getSwitch();
+    bool button_changed = (current_switch != s.prevButton);
+    s.prevButton = current_switch;
+    if (button_changed) s.lastButtonChangeTime = now;
+
+    bool shouldSend = false;
+    int cmd = 0;
+
+    if (js.isInUse()) {
+      s.lastActiveTime = now;
+      cmd = js.getMotorCommand();
+      shouldSend = true;
+    } else if (now - s.lastActiveTime < 100) {
+      // Just released — keep sending zero briefly
+      cmd = 0;
+      shouldSend = true;
+    } else if (now - s.lastButtonChangeTime < 100) {
+      // Button changed recently — ensure state is transmitted
+      cmd = 0;
+      shouldSend = true;
+    }
+
+    if (shouldSend && (now - s.lastCommandSent >= COMMAND_INTERVAL)) {
+      s.lastCommandSent = now;
+      sendMotorCommand(s.targetMAC, cmd, current_switch);
+      Serial.printf("J%d→K%d TX:%+5d btn:%d\n", i + 1, i + 1, cmd, current_switch);
+    }
   }
-  
-  if (joystick.isInUse()) {
-    // Joystick is active - send commands at regular intervals
-    lastJoystickActiveTime = now;
-    if (now - lastCommandSent >= COMMAND_INTERVAL) {
-      lastCommandSent = now;
-      commandSent = joystick.getMotorCommand();
-      sendMotorCommand(commandSent, current_switch);
-      { // LED: brightness scaled by command magnitude, white=positive, red=negative
-        uint8_t brightness = map(abs(commandSent), 0, 1000, 0, 255);
-        if (commandSent >= 0)
-          neopixelWrite(2, brightness, brightness, brightness);  // White
-        else
-          neopixelWrite(2, brightness, 0, 0);                    // Red
+
+  // LED: reflect dominant joystick command — brightness = speed, colour = direction
+  int dominantCmd = 0;
+  for (int i = 0; i < MAX_KITES; i++) {
+    if (!slots[i].assigned || !slots[i].controller) continue;
+    int c = slots[i].controller->getMotorCommand();
+    if (abs(c) > abs(dominantCmd)) dominantCmd = c;
+  }
+  if (dominantCmd > 0) {
+    int brightness = map(dominantCmd, 0, 1000, 10, 255);
+    neopixelWrite(2, brightness, brightness, brightness);  // White = extending
+  } else if (dominantCmd < 0) {
+    int brightness = map(-dominantCmd, 0, 1000, 10, 255);
+    neopixelWrite(2, brightness, 0, 0);                    // Red = retracting
+  } else {
+    // Idle — heartbeat: N dim blue blips every ~2s (N = assigned kites)
+    static int  hbBlip = 0;         // 0 = initial pause, 1..N = current blip
+    static bool hbOn   = false;
+    static unsigned long hbTime = 0;
+    int connectedKites = 0;
+    for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) connectedKites++;
+
+    if (connectedKites == 0) {
+      neopixelWrite(2, 0, 0, 0);                           // No fleet — stay off
+      hbBlip = 0; hbTime = now;
+    } else if (hbBlip == 0) {
+      neopixelWrite(2, 0, 0, 0);                           // Pre-sequence pause
+      if (now - hbTime >= 2000) { hbBlip = 1; hbOn = true; hbTime = now; }
+    } else if (hbOn) {
+      neopixelWrite(2, 0, 0, 10);                          // Dim blue blip on
+      if (now - hbTime >= 80) { hbOn = false; hbTime = now; }
+    } else {
+      neopixelWrite(2, 0, 0, 0);
+      if (hbBlip < connectedKites) {
+        if (now - hbTime >= 150) { hbBlip++; hbOn = true; hbTime = now; }  // Next blip
+      } else {
+        if (now - hbTime >= 2000) { hbBlip = 1; hbOn = true; hbTime = now; }  // New cycle
       }
-      Serial.printf("TX: %5d  rev/s: %+6.2f  X: %5d  Y: %5d  Btn: %d\n", 
-                    commandSent, (commandSent / 1000.0) * 2.0,
-                    joystick.getX(), joystick.getY(), current_switch);
-      commandSentThisLoop = true;
-    }
-  } else if (now - lastJoystickActiveTime < 100) {
-    // Joystick released less than 100ms ago - keep sending zero
-    if (now - lastCommandSent >= COMMAND_INTERVAL) {
-      lastCommandSent = now;
-      commandSent = 0;
-      sendMotorCommand(0, current_switch);
-      neopixelWrite(2, 5, 5, 5);  // Dim white for idle send
-      Serial.printf("TX:     0  rev/s:  +0.00  idle: %3lums          Btn: %d\n", now - lastJoystickActiveTime, current_switch);
-      commandSentThisLoop = true;
-    }
-  } else if (now - lastButtonChangeTime < 100) {
-    // Button changed recently - keep sending to ensure button state is transmitted
-    if (now - lastCommandSent >= COMMAND_INTERVAL) {
-      lastCommandSent = now;
-      commandSent = 0;
-      sendMotorCommand(0, current_switch);
-      neopixelWrite(2, 5, 5, 5);  // Dim white for button update
-      Serial.printf("TX:     0  rev/s:  +0.00  btn update           Btn: %d\n", current_switch);
-      commandSentThisLoop = true;
     }
   }
-  // After 100ms idle AND no recent button changes, send nothing so main board's local joystick can take over
-  
-  // Periodically check WiFi status (every 10s)
+
+  // Periodic fleet re-discovery — every 10s if any slot unassigned, else every 30s
+  static unsigned long lastDiscoveryTime = 0;
+  {
+    bool anyUnassigned = false;
+    for (int i = 0; i < MAX_KITES; i++) if (!slots[i].assigned) { anyUnassigned = true; break; }
+    unsigned long interval = anyUnassigned ? 10000UL : 30000UL;
+    if (now - lastDiscoveryTime >= interval) {
+      lastDiscoveryTime = now;
+      int found = doFleetDiscovery(1, 800);  // Quick single attempt
+      // Print connection status
+      int conn = 0;
+      for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) conn++;
+      Serial.printf("[STATUS] %d/%d kite(s) connected", conn, MAX_KITES);
+      for (int i = 0; i < MAX_KITES; i++) {
+        if (slots[i].assigned) {
+          Serial.printf("  J%d→K%d(%02X:%02X:%02X:%02X:%02X:%02X)",
+                        i + 1, i + 1,
+                        slots[i].targetMAC[0], slots[i].targetMAC[1],
+                        slots[i].targetMAC[2], slots[i].targetMAC[3],
+                        slots[i].targetMAC[4], slots[i].targetMAC[5]);
+        } else {
+          Serial.printf("  J%d→(none)", i + 1);
+        }
+      }
+      Serial.println();
+      (void)found;
+    }
+  }
+
+  // Periodically check WiFi (every 30s)
   static unsigned long lastWiFiCheckTime = 0;
-  if (now - lastWiFiCheckTime > 10000) {
+  if (now - lastWiFiCheckTime > 30000) {
     lastWiFiCheckTime = now;
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.printf("WiFi connected | Channel: %d\n", WiFi.channel());
+      Serial.printf("[WiFi] Connected | Channel: %d\n", WiFi.channel());
     } else {
-      Serial.println("WiFi disconnected (ESP-NOW on default channel 1)");
+      Serial.println("[WiFi] Disconnected");
     }
   }
-  
-  // Debug output every loop
-  static unsigned long lastDebugPrint = 0;
-  // if (now - lastDebugPrint >= 50) {  // Print every 50ms
-  //   if (joystick.isInUse()) {
-  //     Serial.printf("[ACTIVE] X=%d Y=%d Cmd=%d | Sent=%d\n", 
-  //                   joystick.getX(), joystick.getY(), joystick.getMotorCommand(), commandSentThisLoop);
-  //   } else if (now - lastJoystickActiveTime < 100) {
-  //     Serial.printf("[RELEASE] Idle=%lums | Sent=%d\n", 
-  //                   now - lastJoystickActiveTime, commandSentThisLoop);
-  //   } else {
-  //     Serial.printf("[IDLE] Idle=%lums | No TX\n", now - lastJoystickActiveTime);
-  //   }
-  //   lastDebugPrint = now;
-  // }
-  
-  unsigned long loopElapsed = millis() - loopStart;
-  // Serial.printf("Loop: %lums\n", loopElapsed);
-  
-  delay(5);  // 5ms loop time
+
+  delay(5);
 }

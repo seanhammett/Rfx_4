@@ -12,6 +12,7 @@
 #include "imu_handler.h"
 #include "autopilot.h"
 #include "ota_handler.h"
+#include "fleet_protocol.h"
 
 // ===== Arduino Nano ESP32 Pin Definitions for MCP2518FD (SPI) =====
 // Nano ESP32 uses ESP32-S3 with Arduino pin mapping (Dx/Ax macros)
@@ -49,9 +50,10 @@ IMUHandler imu;
 // ===== Autopilot =====
 Autopilot autopilot;
 
-// ===== Kite Identity =====
-const char* KITE_ID    = "Kite-2";    // Unique name — change per kite
-const char* KITE_COLOR = "#ffa807";   // Dashboard display colour
+// ===== Kite Identity (auto-assigned by fleet protocol) =====
+char kiteIdStr[16] = "Kite-?";
+const char* KITE_ID    = kiteIdStr;
+const char* KITE_COLOR = "#ffffff";
 
 // ===== WiFi Configuration =====
 const char* WIFI_SSID = "iPhone 123";
@@ -60,15 +62,24 @@ AsyncWebServer server(80);
 OTAHandler otaHandler;
 
 // ===== ESP-NOW Remote Control =====
-typedef struct {
-  int16_t motor_speed;  // Remote joystick command (-1000 to +1000 range)
-  uint8_t command;      // 0=speed, 1=unused, 2=stop
-  uint8_t button;       // Button state (0=released, 1=pressed)
-} ControlMessage;
-
-ControlMessage remoteControlMsg;
+LegacyControlMsg remoteControlMsg;
 volatile bool newRemoteCommand = false;     // Flag set in ISR
 unsigned long lastRemoteCommandTime = 0;    // Track when we last received remote command
+
+// ===== Fleet State =====
+bool isFleetHost = false;
+uint8_t myKiteId = 0;                       // 0 = unassigned
+KiteSlot fleet[MAX_KITES];
+uint8_t fleetSize = 0;
+unsigned long lastHostAnnounce = 0;          // Timestamp of last announce heard/sent
+uint8_t myMAC[6];
+
+// Fleet message buffers (set in ISR, processed in loop)
+volatile bool newFleetRegister = false;
+FleetRegisterMsg pendingRegister;
+volatile bool newRemoteDiscover = false;
+FleetDiscoverMsg pendingDiscover;
+uint8_t discoverSenderMAC[6];               // MAC of remote that sent discover
 
 // ===== Timing & Control Constants =====
 const unsigned long MOTION_INTERVAL = 10;        // Update every 10ms (100Hz)
@@ -139,6 +150,106 @@ const char* getMotorFaultDescription(uint8_t fault) {
   return buffer;
 }
 
+// ===== Fleet Helper Functions =====
+
+// Store our own MAC address
+void getMyMacAddress() {
+  esp_read_mac(myMAC, ESP_MAC_WIFI_STA);
+}
+
+// Register broadcast peer for fleet messages
+void registerBroadcastPeer() {
+  esp_now_peer_info_t peer = {};
+  memset(peer.peer_addr, 0xFF, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+  if (!esp_now_is_peer_exist(peer.peer_addr)) {
+    esp_now_add_peer(&peer);
+  }
+}
+
+// Register unicast peer (for sending ACK/roster to a specific MAC)
+void registerUnicastPeer(const uint8_t* mac) {
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, mac, 6);
+  peer.channel = 0;
+  peer.encrypt = false;
+  if (!esp_now_is_peer_exist(peer.peer_addr)) {
+    esp_now_add_peer(&peer);
+  }
+}
+
+// Add a kite to the fleet roster (host only). Returns assigned kite_id, 0 if full.
+uint8_t addKiteToFleet(const uint8_t* mac, uint32_t ip) {
+  // Check if already registered
+  for (uint8_t i = 0; i < fleetSize; i++) {
+    if (memcmp(fleet[i].mac, mac, 6) == 0) {
+      fleet[i].ip_addr = ip;  // update IP
+      return fleet[i].kite_id;
+    }
+  }
+  if (fleetSize >= MAX_KITES) return 0;
+  KiteSlot& slot = fleet[fleetSize];
+  memcpy(slot.mac, mac, 6);
+  slot.kite_id = fleetSize + 1;
+  slot.ip_addr = ip;
+  fleetSize++;
+  return slot.kite_id;
+}
+
+// Broadcast fleet announce (host heartbeat with roster)
+void broadcastFleetAnnounce() {
+  FleetAnnounceMsg msg = {};
+  msg.msg_type = MSG_FLEET_ANNOUNCE;
+  memcpy(msg.host_mac, myMAC, 6);
+  msg.fleet_size = fleetSize;
+  memcpy(msg.kites, fleet, sizeof(KiteSlot) * fleetSize);
+  uint8_t broadcast[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+  esp_now_send(broadcast, (uint8_t*)&msg, sizeof(msg));
+}
+
+// Handle a pending registration request (host only, called from loop)
+void handleFleetRegister() {
+  uint8_t id = addKiteToFleet(pendingRegister.requester_mac, pendingRegister.requester_ip);
+  if (id == 0) {
+    Serial.println("[FLEET] Fleet full, registration rejected");
+    return;
+  }
+  Serial.printf("[FLEET] Registered kite %d (MAC %02X:%02X:%02X:%02X:%02X:%02X)\n",
+                id,
+                pendingRegister.requester_mac[0], pendingRegister.requester_mac[1],
+                pendingRegister.requester_mac[2], pendingRegister.requester_mac[3],
+                pendingRegister.requester_mac[4], pendingRegister.requester_mac[5]);
+
+  // Send ACK to the requester
+  registerUnicastPeer(pendingRegister.requester_mac);
+  FleetAckMsg ack = {};
+  ack.msg_type = MSG_FLEET_ACK;
+  ack.assigned_id = id;
+  ack.fleet_size = fleetSize;
+  memcpy(ack.kites, fleet, sizeof(KiteSlot) * fleetSize);
+  esp_now_send(pendingRegister.requester_mac, (uint8_t*)&ack, sizeof(ack));
+
+  // Also broadcast updated roster
+  broadcastFleetAnnounce();
+}
+
+// Handle a remote discover request (host only, called from loop)
+void handleRemoteDiscover() {
+  Serial.printf("[FLEET] Remote discover from %02X:%02X:%02X:%02X:%02X:%02X (joystick %d)\n",
+                discoverSenderMAC[0], discoverSenderMAC[1],
+                discoverSenderMAC[2], discoverSenderMAC[3],
+                discoverSenderMAC[4], discoverSenderMAC[5],
+                pendingDiscover.joystick_id);
+
+  registerUnicastPeer(discoverSenderMAC);
+  FleetRosterMsg roster = {};
+  roster.msg_type = MSG_FLEET_ROSTER;
+  roster.fleet_size = fleetSize;
+  memcpy(roster.kites, fleet, sizeof(KiteSlot) * fleetSize);
+  esp_now_send(discoverSenderMAC, (uint8_t*)&roster, sizeof(roster));
+}
+
 // ===== Motor Mode Descriptions =====
 const char* getMotorModeDescription(int mode) {
   switch(mode) {
@@ -187,12 +298,60 @@ void processJoystickInput(int raw_command, const char* source_label) {
   }
 }
 
-// ===== ESP-NOW Callback =====
+// ===== ESP-NOW Callback (fleet-aware dispatcher) =====
 void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-  // ISR context - keep this FAST! Just copy data and set flag
-  if (data_len == sizeof(ControlMessage) && !newRemoteCommand) {
-    memcpy(&remoteControlMsg, data, sizeof(remoteControlMsg));
-    newRemoteCommand = true;  // Signal main loop to process
+  // ISR context — keep FAST! Copy data and set flags only.
+  if (data_len == 0) return;
+
+  // Legacy 4-byte ControlMessage (backward compat with old remotes)
+  if (data_len == sizeof(LegacyControlMsg)) {
+    if (!newRemoteCommand) {
+      memcpy(&remoteControlMsg, data, sizeof(LegacyControlMsg));
+      newRemoteCommand = true;
+    }
+    return;
+  }
+
+  uint8_t msg_type = data[0];
+
+  switch (msg_type) {
+    case MSG_CONTROL:
+      if (data_len >= sizeof(FleetControlMsg) && !newRemoteCommand) {
+        const FleetControlMsg* msg = (const FleetControlMsg*)data;
+        remoteControlMsg.motor_speed = msg->motor_speed;
+        remoteControlMsg.command = msg->command;
+        remoteControlMsg.button = msg->button;
+        newRemoteCommand = true;
+      }
+      break;
+
+    case MSG_FLEET_ANNOUNCE:
+      if (data_len >= sizeof(FleetAnnounceMsg) && !isFleetHost) {
+        const FleetAnnounceMsg* msg = (const FleetAnnounceMsg*)data;
+        lastHostAnnounce = millis();
+        fleetSize = msg->fleet_size;
+        if (fleetSize > MAX_KITES) fleetSize = MAX_KITES;
+        memcpy(fleet, msg->kites, sizeof(KiteSlot) * fleetSize);
+      }
+      break;
+
+    case MSG_FLEET_REGISTER:
+      if (data_len >= sizeof(FleetRegisterMsg) && isFleetHost && !newFleetRegister) {
+        memcpy(&pendingRegister, data, sizeof(FleetRegisterMsg));
+        newFleetRegister = true;
+      }
+      break;
+
+    case MSG_REMOTE_DISCOVER:
+      if (data_len >= sizeof(FleetDiscoverMsg) && isFleetHost && !newRemoteDiscover) {
+        memcpy(&pendingDiscover, data, sizeof(FleetDiscoverMsg));
+        memcpy(discoverSenderMAC, mac_addr, 6);
+        newRemoteDiscover = true;
+      }
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -313,6 +472,65 @@ void setup() {
   }
   
   Serial.println("  - ESP-NOW is ready for remote control");
+
+  // ===== Fleet Discovery & Host Election =====
+  getMyMacAddress();
+  registerBroadcastPeer();
+  Serial.printf("[FLEET] My MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                myMAC[0], myMAC[1], myMAC[2], myMAC[3], myMAC[4], myMAC[5]);
+
+  // Listen for an existing host announce for DISCOVER_TIMEOUT_MS
+  Serial.println("[FLEET] Listening for existing host...");
+  unsigned long discoverStart = millis();
+  while (millis() - discoverStart < DISCOVER_TIMEOUT_MS) {
+    if (lastHostAnnounce != 0) break;  // heard an announce
+    delay(50);
+  }
+
+  if (lastHostAnnounce != 0) {
+    // An existing host was found — register with it
+    Serial.println("[FLEET] Host found, sending register request...");
+    FleetRegisterMsg reg = {};
+    reg.msg_type = MSG_FLEET_REGISTER;
+    memcpy(reg.requester_mac, myMAC, 6);
+    reg.requester_ip = WiFi.status() == WL_CONNECTED ? (uint32_t)WiFi.localIP() : 0;
+    uint8_t broadcast[] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+    esp_now_send(broadcast, (uint8_t*)&reg, sizeof(reg));
+
+    // Wait briefly for ACK (the ISR updates fleet[] via MSG_FLEET_ANNOUNCE)
+    delay(500);
+
+    // Find our kite_id in the roster
+    for (uint8_t i = 0; i < fleetSize; i++) {
+      if (memcmp(fleet[i].mac, myMAC, 6) == 0) {
+        myKiteId = fleet[i].kite_id;
+        break;
+      }
+    }
+    if (myKiteId == 0) {
+      // Host didn't ACK in time — fall back to self-election
+      Serial.println("[FLEET] No ACK received, self-electing as host");
+    } else {
+      Serial.printf("[FLEET] Joined fleet as kite %d\n", myKiteId);
+    }
+  }
+
+  if (myKiteId == 0) {
+    // No host heard, or ACK failed — become host
+    isFleetHost = true;
+    myKiteId = addKiteToFleet(myMAC,
+                              WiFi.status() == WL_CONNECTED ? (uint32_t)WiFi.localIP() : 0);
+    lastHostAnnounce = millis();
+    broadcastFleetAnnounce();
+    Serial.printf("[FLEET] Self-elected as HOST, kite_id=%d\n", myKiteId);
+  }
+
+  // Set display identity from kite_id
+  snprintf(kiteIdStr, sizeof(kiteIdStr), "Kite-%d", myKiteId);
+  KITE_COLOR = (myKiteId < 5) ? KITE_COLORS[myKiteId] : KITE_COLORS[0];
+  Serial.printf("[FLEET] Identity: %s  Color: %s  Host: %s\n",
+                kiteIdStr, KITE_COLOR, isFleetHost ? "YES" : "NO");
+
   
   // ===== SPIFFS Setup =====
   if (!SPIFFS.begin(false)) {
@@ -439,6 +657,83 @@ void setup() {
   server.on("/motor/stop", HTTP_GET, [](AsyncWebServerRequest *request){
     moteus.SetStop();
     request->send(200, "application/json", "{\"status\":\"stopped\"}");
+  });
+
+  // ===== Fleet Endpoints =====
+  // /fleet — fleet dashboard HTML (served from SPIFFS)
+  server.on("/fleet", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/fleet_dashboard.html", "text/html");
+  });
+
+  // /fleet/kites — simple roster list
+  server.on("/fleet/kites", HTTP_GET, [](AsyncWebServerRequest *request){
+    DynamicJsonDocument doc(512);
+    doc["fleet_size"] = fleetSize;
+    JsonArray arr = doc.createNestedArray("kites");
+    char mac_str[18];
+    for (uint8_t i = 0; i < fleetSize; i++) {
+      JsonObject k = arr.createNestedObject();
+      k["kite_id"] = fleet[i].kite_id;
+      snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+               fleet[i].mac[0], fleet[i].mac[1], fleet[i].mac[2],
+               fleet[i].mac[3], fleet[i].mac[4], fleet[i].mac[5]);
+      k["mac"] = mac_str;
+      IPAddress ip(fleet[i].ip_addr);
+      k["ip"] = ip.toString();
+      k["color"] = (fleet[i].kite_id < 5) ? KITE_COLORS[fleet[i].kite_id] : "#ffffff";
+    }
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+  });
+
+  // /fleet/status — roster + local telemetry (browser fetches remote kites directly)
+  server.on("/fleet/status", HTTP_GET, [](AsyncWebServerRequest *request){
+    DynamicJsonDocument doc(2048);
+    doc["is_host"] = isFleetHost;
+    doc["fleet_size"] = fleetSize;
+    JsonArray kitesArr = doc.createNestedArray("kites");
+
+    for (uint8_t i = 0; i < fleetSize; i++) {
+      JsonObject kObj = kitesArr.createNestedObject();
+      kObj["kite_id"] = fleet[i].kite_id;
+      char mac_str[18];
+      snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+               fleet[i].mac[0], fleet[i].mac[1], fleet[i].mac[2],
+               fleet[i].mac[3], fleet[i].mac[4], fleet[i].mac[5]);
+      kObj["mac"] = mac_str;
+      IPAddress ip(fleet[i].ip_addr);
+      kObj["ip"] = ip.toString();
+      kObj["color"] = (fleet[i].kite_id < 5) ? KITE_COLORS[fleet[i].kite_id] : "#ffffff";
+
+      // Local kite — inline live telemetry
+      if (memcmp(fleet[i].mac, myMAC, 6) == 0) {
+        kObj["online"] = true;
+        JsonObject t = kObj.createNestedObject("telemetry");
+        if (motorResponseReceived) {
+          const auto& r = moteus.last_result().values;
+          t["velocity"] = r.velocity;
+          t["torque"] = r.torque;
+          t["tension"] = abs(r.torque) / SPOOL_RADIUS_M;
+          t["position"] = r.position;
+          t["mode"] = getMotorModeDescription(static_cast<int>(r.mode));
+          t["fault"] = r.fault;
+        }
+        t["line_length"] = line_length;
+        t["target_seeking"] = target_seeking_enabled;
+        t["line_length_target"] = line_length_target;
+        t["pitch"] = imu.pitch;
+        t["yaw"] = imu.yaw;
+        t["remote_active"] = isRemoteActive();
+      } else {
+        // Remote kite — browser polls directly; mark online if IP is known
+        kObj["online"] = (fleet[i].ip_addr != 0);
+      }
+    }
+
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
   });
   
   // Catch-all 404 handler
@@ -735,6 +1030,38 @@ void printStatus() {
 }
 
 void loop() {
+  // ===== Fleet Host Duties =====
+  if (isFleetHost) {
+    // Periodic heartbeat broadcast
+    if (millis() - lastHostAnnounce >= FLEET_ANNOUNCE_INTERVAL) {
+      broadcastFleetAnnounce();
+      lastHostAnnounce = millis();
+    }
+    // Process pending kite registration
+    if (newFleetRegister) {
+      newFleetRegister = false;
+      handleFleetRegister();
+    }
+    // Process pending remote discover
+    if (newRemoteDiscover) {
+      newRemoteDiscover = false;
+      handleRemoteDiscover();
+    }
+  } else {
+    // Non-host: detect host timeout and re-elect
+    if (lastHostAnnounce != 0 && millis() - lastHostAnnounce > HOST_TIMEOUT_MS) {
+      Serial.println("[FLEET] Host timeout — self-electing as new host");
+      isFleetHost = true;
+      fleetSize = 0;
+      myKiteId = addKiteToFleet(myMAC,
+                                WiFi.status() == WL_CONNECTED ? (uint32_t)WiFi.localIP() : 0);
+      snprintf(kiteIdStr, sizeof(kiteIdStr), "Kite-%d", myKiteId);
+      KITE_COLOR = (myKiteId < 5) ? KITE_COLORS[myKiteId] : KITE_COLORS[0];
+      lastHostAnnounce = millis();
+      broadcastFleetAnnounce();
+    }
+  }
+
   processRemoteCommands();
   imu.update();
   

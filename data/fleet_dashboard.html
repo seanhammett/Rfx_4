@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CclipPath id='c'%3E%3Ccircle cx='16' cy='16' r='16'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='32' height='32' fill='%235ab5ff'/%3E%3Cpolygon points='0,0 32,0 0,32' fill='white'/%3E%3C/g%3E%3C/svg%3E">
+    <title>RFx Fleet Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: #ccc; padding: 16px; }
+        h1 { color: #fff; font-size: 22px; margin-bottom: 4px; }
+        .subtitle { color: #888; font-size: 12px; margin-bottom: 16px; }
+        .fleet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .kite-card {
+            background: #242424; border-radius: 8px; padding: 16px;
+            border-left: 4px solid #555; position: relative;
+        }
+        .kite-card.online { border-left-color: var(--kite-color, #5ab5ff); }
+        .kite-card.offline { opacity: 0.5; }
+        .kite-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .kite-name { font-size: 16px; font-weight: bold; color: #fff; }
+        .kite-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+        .kite-badge.host { background: #3a5a2a; color: #8f8; }
+        .kite-badge.online { background: #2a3a5a; color: #8cf; }
+        .kite-badge.offline { background: #4a2a2a; color: #f88; }
+        .kite-ip { font-size: 11px; color: #777; margin-bottom: 10px; font-family: 'Courier New', monospace; }
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+        .telem-item { }
+        .telem-label { font-size: 10px; color: #777; text-transform: uppercase; }
+        .telem-value { font-size: 16px; font-weight: bold; color: #5ab5ff; font-family: 'Courier New', monospace; }
+        .telem-value.fault { color: #f55; }
+        .telem-value.ok { color: #5f5; }
+        .status-bar { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .status-pill { font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #333; color: #aaa; }
+        .status-pill.active { background: #2a4a2a; color: #8f8; }
+        .no-kites { text-align: center; color: #666; padding: 40px; font-size: 14px; }
+        a { color: #5ab5ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .nav { margin-bottom: 12px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">Single-Kite Dashboard</a> &nbsp;|&nbsp; <strong>Fleet Dashboard</strong>
+    </div>
+    <h1>RFx Fleet</h1>
+    <div class="subtitle" id="subtitle">Connecting...</div>
+    <div class="fleet-grid" id="fleetGrid">
+        <div class="no-kites" id="noKites">Waiting for fleet data...</div>
+    </div>
+
+    <script>
+    const POLL_MS = 1500;
+    const grid = document.getElementById('fleetGrid');
+    const subtitle = document.getElementById('subtitle');
+
+    function fmt(v, d) {
+        if (v === undefined || v === null) return '—';
+        return typeof v === 'number' ? v.toFixed(d !== undefined ? d : 2) : v;
+    }
+
+    // Fetch roster from host, then poll each kite's /status directly
+    let roster = [];  // [{kite_id, mac, ip, color}]
+
+    async function fetchRoster() {
+        try {
+            const resp = await fetch('/fleet/kites');
+            if (!resp.ok) throw new Error(resp.status);
+            const data = await resp.json();
+            roster = data.kites || [];
+            subtitle.textContent = `${roster.length} kite(s) registered — polling each directly every ${POLL_MS/1000}s`;
+        } catch (e) {
+            subtitle.textContent = 'Cannot reach host — retrying...';
+        }
+    }
+
+    async function pollAllKites() {
+        if (roster.length === 0) {
+            grid.innerHTML = '<div class="no-kites">No kites registered yet</div>';
+            return;
+        }
+
+        // Fetch /status from every kite in parallel (CORS headers allow cross-origin)
+        const results = await Promise.all(roster.map(async (k) => {
+            if (!k.ip || k.ip === '0.0.0.0') return { ...k, online: false };
+            try {
+                const r = await fetch(`http://${k.ip}/status`, { signal: AbortSignal.timeout(1500) });
+                if (!r.ok) return { ...k, online: false };
+                const telemetry = await r.json();
+                return { ...k, online: true, telemetry };
+            } catch {
+                return { ...k, online: false };
+            }
+        }));
+
+        const onlineCount = results.filter(k => k.online).length;
+        subtitle.textContent = `${roster.length} kite(s), ${onlineCount} online — polling each directly every ${POLL_MS/1000}s`;
+        grid.innerHTML = results.map(renderKite).join('');
+    }
+
+    // renderKite now always receives the /status format (motor.*, imu.*, etc.)
+    function renderKite(k) {
+        const t = k.telemetry || {};
+        const motor = t.motor || {};
+        const imuData = t.imu || {};
+
+        const velocity = fmt(motor.actual_velocity, 2);
+        const torque   = fmt(motor.torque, 3);
+        const tension  = fmt(motor.tension, 1);
+        const lineLen  = fmt(t.line_length, 2);
+        const pitch    = fmt(imuData.pitch, 1);
+        const yaw      = fmt(imuData.yaw, 1);
+        const mode     = motor.mode_name || '—';
+        const fault    = motor.fault || 0;
+        const remoteActive = t.joystick ? t.joystick.remote_active : false;
+        const targetSeeking = t.target_seeking_enabled;
+        const target   = t.line_length_target;
+
+        const color = k.color || '#5ab5ff';
+        const isHost = (k.kite_id === 1);
+        let badgeClass = k.online ? (isHost ? 'host' : 'online') : 'offline';
+        let badgeText = k.online ? (isHost ? 'Host' : 'Online') : 'Offline';
+
+        let html = `
+        <div class="kite-card ${k.online ? 'online' : 'offline'}" style="--kite-color: ${color}">
+            <div class="kite-header">
+                <span class="kite-name" style="color:${color}">Kite ${k.kite_id}</span>
+                <span class="kite-badge ${badgeClass}">${badgeText}</span>
+            </div>
+            <div class="kite-ip">${k.ip || '—'} &nbsp; ${k.mac || ''}</div>`;
+
+        if (k.online && k.telemetry) {
+            html += `
+            <div class="telemetry-grid">
+                <div class="telem-item"><div class="telem-label">Velocity</div><div class="telem-value">${velocity} r/s</div></div>
+                <div class="telem-item"><div class="telem-label">Tension</div><div class="telem-value">${tension} N</div></div>
+                <div class="telem-item"><div class="telem-label">Line Length</div><div class="telem-value">${lineLen} m</div></div>
+                <div class="telem-item"><div class="telem-label">Torque</div><div class="telem-value">${torque} Nm</div></div>
+                <div class="telem-item"><div class="telem-label">Pitch</div><div class="telem-value">${pitch}&deg;</div></div>
+                <div class="telem-item"><div class="telem-label">Yaw</div><div class="telem-value">${yaw}&deg;</div></div>
+                <div class="telem-item"><div class="telem-label">Mode</div><div class="telem-value ${fault > 0 ? 'fault' : 'ok'}">${mode}</div></div>
+                <div class="telem-item"><div class="telem-label">Target</div><div class="telem-value">${target !== undefined ? fmt(target, 2) + ' m' : '—'}</div></div>
+            </div>
+            <div class="status-bar">
+                <span class="status-pill ${remoteActive ? 'active' : ''}">Remote</span>
+                <span class="status-pill ${targetSeeking ? 'active' : ''}">Target Seek</span>
+                ${fault > 0 ? '<span class="status-pill" style="background:#4a2a2a;color:#f88">Fault 0x' + fault.toString(16).toUpperCase() + '</span>' : ''}
+            </div>`;
+        } else if (!k.online) {
+            html += `<div style="color:#666;font-size:12px;padding:8px 0;">No telemetry available</div>`;
+        }
+        html += `</div>`;
+        return html;
+    }
+
+    // Initial load: get roster then start polling
+    async function init() {
+        await fetchRoster();
+        await pollAllKites();
+        setInterval(pollAllKites, POLL_MS);
+        setInterval(fetchRoster, 10000);  // refresh roster every 10s in case kites join/leave
+    }
+    init();
+    </script>
+</body>
+</html>
