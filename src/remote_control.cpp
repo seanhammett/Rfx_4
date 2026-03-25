@@ -21,6 +21,7 @@
   #define DZ_Y_UPPER  2143
   #define DZ_X_LOWER  2063
   #define DZ_X_UPPER  2124
+  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // MAC: 3C:84:27:FC:C8:9C (rfx-4 board 1)
 #elif ACTIVE_JOYSTICK == 2
   #define JOYSTICK_X_PIN    4
   #define JOYSTICK_Y_PIN    5
@@ -29,6 +30,7 @@
   #define DZ_Y_UPPER  2113
   #define DZ_X_LOWER  2078
   #define DZ_X_UPPER  2137
+  #define RECEIVER_MAC  {0xE4, 0xB0, 0x63, 0xAE, 0x7B, 0x28}  // MAC: E4:B0:63:AE:7B:28 (rfx-4 board 2)
 #elif ACTIVE_JOYSTICK == 3
   #define JOYSTICK_X_PIN    12
   #define JOYSTICK_Y_PIN    10
@@ -37,6 +39,7 @@
   #define DZ_Y_UPPER  2160
   #define DZ_X_LOWER  2053
   #define DZ_X_UPPER  2111
+  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // TODO: update with board 3 MAC
 #elif ACTIVE_JOYSTICK == 4
   #define JOYSTICK_X_PIN    13
   #define JOYSTICK_Y_PIN    11
@@ -45,6 +48,7 @@
   #define DZ_Y_UPPER  2161
   #define DZ_X_LOWER  2046
   #define DZ_X_UPPER  2101
+  #define RECEIVER_MAC  {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}  // TODO: update with board 4 MAC
 #else
   #error "ACTIVE_JOYSTICK must be 1, 2, 3, or 4"
 #endif
@@ -53,10 +57,8 @@
 const char* WIFI_SSID = "iPhone 123";
 const char* WIFI_PASS = "sonoma1991";
 
-// MAC address of the main Rfx_3 ESP32-C3 (UPDATE THIS!)
-// You'll see this printed in the main system's serial output on boot
-// Example format: 34:B4:72:EA:48:3C
-uint8_t receiverMAC[] = {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}; //  MAC: 3C:84:27:FC:C8:9C
+// MAC address of the target rfx-4 main board — set per joystick in the #if block above.
+uint8_t receiverMAC[] = RECEIVER_MAC;
 
 // =================== ESP-NOW DATA STRUCTURE ===================
 typedef struct {
