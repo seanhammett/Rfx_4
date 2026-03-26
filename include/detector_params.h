@@ -24,7 +24,7 @@
 #define AF_TENSION_MIN              0.3f   // N     — minimum tension to consider flying
 #define AF_VARIATION_THRESHOLD      2.0f   // combined variation score threshold (pitch + yaw + tension)
 #define AF_ATTACK_RATE              1.0f   // /s    — confidence rise rate
-#define AF_DECAY_RATE               0.5f   // /s    — confidence fall rate (slow decay for stability)
+#define AF_DECAY_RATE               0.1f   // /s    — confidence fall rate (slow decay for stability)
 #define AF_VARIATION_ALPHA          0.05f  // EMA smoothing for variation tracking
 
 #endif // DETECTOR_PARAMS_H

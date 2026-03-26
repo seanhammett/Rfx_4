@@ -13,6 +13,7 @@
 #include "autopilot.h"
 #include "ota_handler.h"
 #include "fleet_protocol.h"
+#include "flight_logger.h"
 
 // ===== Arduino Nano ESP32 Pin Definitions for MCP2518FD (SPI) =====
 // Nano ESP32 uses ESP32-S3 with Arduino pin mapping (Dx/Ax macros)
@@ -49,6 +50,9 @@ IMUHandler imu;
 
 // ===== Autopilot =====
 Autopilot autopilot;
+
+// ===== Flight Logger =====
+FlightLogger flightLogger;
 
 // ===== Kite Identity (auto-assigned by fleet protocol) =====
 char kiteIdStr[16] = "Kite-?";
@@ -548,6 +552,10 @@ void setup() {
   } else {
     Serial.println("[OK] SPIFFS mounted successfully");
   }
+
+  // ===== Flight Logger Setup =====
+  flightLogger.begin(myKiteId);
+  Serial.println("[OK] Flight logger initialized");
   
   // ===== Web Server Setup =====
   // CORS headers so dashboard served from one kite can reach the others
@@ -558,7 +566,7 @@ void setup() {
   });
   
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
-    DynamicJsonDocument doc(2048);
+    DynamicJsonDocument doc(3072);
     bool remoteActive = isRemoteActive();
     
     if (motorResponseReceived) {
@@ -631,6 +639,11 @@ void setup() {
     doc["detectors"]["af_variation_threshold"] = AF_VARIATION_THRESHOLD;
     doc["detectors"]["af_attack_rate"] = AF_ATTACK_RATE;
     doc["detectors"]["af_decay_rate"] = AF_DECAY_RATE;
+
+    doc["flight_logger"]["recording"] = flightLogger.isRecording();
+    doc["flight_logger"]["uploading"] = flightLogger.isUploading();
+    doc["flight_logger"]["samples"] = flightLogger.getSampleCount();
+    doc["flight_logger"]["bytes"] = flightLogger.getFileBytes();
     
     String response;
     serializeJson(doc, response);
@@ -743,6 +756,39 @@ void setup() {
     request->send(200, "application/json", response);
   });
   
+  // ===== Flight Log Endpoints =====
+  server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *request){
+    DynamicJsonDocument doc(2048);
+    doc["recording"] = flightLogger.isRecording();
+    doc["uploading"] = flightLogger.isUploading();
+    doc["samples"] = flightLogger.getSampleCount();
+    doc["bytes"] = flightLogger.getFileBytes();
+    JsonArray filesArr = doc.createNestedArray("files");
+    File root = SPIFFS.open("/");
+    if (root) {
+      File f = root.openNextFile();
+      while (f) {
+        String name = f.name();
+        size_t sz = f.size();
+        f.close();
+        if (name.endsWith(".csv") && (name.startsWith("/f") || name.startsWith("f"))) {
+          JsonObject fo = filesArr.createNestedObject();
+          fo["name"] = name;
+          fo["size"] = sz;
+        }
+        f = root.openNextFile();
+      }
+    }
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+  });
+
+  server.on("/logs/upload", HTTP_GET, [](AsyncWebServerRequest *request){
+    flightLogger.uploadPending();
+    request->send(200, "application/json", "{\"status\":\"upload_started\"}");
+  });
+
   // Catch-all 404 handler
   server.onNotFound([](AsyncWebServerRequest *request){
     request->send(404, "text/plain", "NOT FOUND: " + String(request->url()));
@@ -1104,6 +1150,28 @@ void loop() {
       float det_tension = fabs(det_result.torque) / SPOOL_RADIUS_M;
       float det_dt = MOTION_INTERVAL / 1000.0;
       autopilot.updateDetectors(imu.pitch, imu.pitch_velocity, imu.yaw, det_tension, line_length, det_dt);
+
+      // Update flight logger
+      const DetectorState& det = autopilot.getDetectors();
+      FlightSample fs = {};
+      fs.commanded_vel_rps = commanded_velocity;
+      fs.actual_vel_rps = det_result.velocity;
+      fs.torque_nm = det_result.torque;
+      fs.tension_n = det_tension;
+      fs.line_length_m = line_length;
+      fs.target_enabled = target_seeking_enabled;
+      fs.target_length_m = line_length_target;
+      fs.remote_joy = remoteControlMsg.motor_speed;
+      fs.remote_active = isRemoteActive();
+      fs.pitch_deg = imu.pitch;
+      fs.pitch_vel_dps = imu.pitch_velocity;
+      fs.yaw_deg = imu.yaw;
+      fs.yaw_vel_dps = imu.yaw_velocity;
+      fs.roll_deg = imu.roll;
+      fs.dive_conf = det.dive_confidence;
+      fs.aww_conf = det.aww_confidence;
+      fs.af_conf = det.active_flight_confidence;
+      flightLogger.update(det.active_flight_confidence, fs);
     }
     
     applySafetyLimits();
