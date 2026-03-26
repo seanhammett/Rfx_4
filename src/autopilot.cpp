@@ -180,7 +180,7 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
 
 // ===== Detectors =====
 
-void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float dt) {
+void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float line_length_m, float dt) {
   // --- Dive detector ---
 
   // Filter pitch velocity with EMA for smoother detection
@@ -235,6 +235,46 @@ void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float
     _detectors.aww_confidence -= _aww_decay_rate * dt;
     if (_detectors.aww_confidence < 0.0f) _detectors.aww_confidence = 0.0f;
   }
+
+  // --- Active-flight detector ---
+
+  // Track variation using EMA of absolute deviation
+  if (!_af_initialized) {
+    _af_pitch_ema = pitch_deg;
+    _af_yaw_ema = yaw_deg;
+    _af_tension_ema = tension_n;
+    _af_pitch_var = 0.0f;
+    _af_yaw_var = 0.0f;
+    _af_tension_var = 0.0f;
+    _af_initialized = true;
+  } else {
+    // Update EMA of each signal
+    _af_pitch_ema += _af_variation_alpha * (pitch_deg - _af_pitch_ema);
+    _af_yaw_ema += _af_variation_alpha * (yaw_deg - _af_yaw_ema);
+    _af_tension_ema += _af_variation_alpha * (tension_n - _af_tension_ema);
+
+    // Track variation as EMA of absolute deviation from the smoothed mean
+    _af_pitch_var += _af_variation_alpha * (fabsf(pitch_deg - _af_pitch_ema) - _af_pitch_var);
+    _af_yaw_var += _af_variation_alpha * (fabsf(yaw_deg - _af_yaw_ema) - _af_yaw_var);
+    _af_tension_var += _af_variation_alpha * (fabsf(tension_n - _af_tension_ema) - _af_tension_var);
+  }
+
+  // Combine variation signals (normalize tension variation by min threshold for comparable scale)
+  float variation_score = _af_pitch_var + _af_yaw_var + (_af_tension_var / fmaxf(_af_tension_min, 0.01f));
+
+  // All conditions for active flight
+  bool has_variation = variation_score > _af_variation_threshold;
+  bool pitch_ok = pitch_deg > _af_pitch_min;
+  bool line_ok = line_length_m > _af_line_length_min;
+  bool tension_ok = tension_n > _af_tension_min;
+
+  if (has_variation && pitch_ok && line_ok && tension_ok) {
+    _detectors.active_flight_confidence += _af_attack_rate * dt;
+    if (_detectors.active_flight_confidence > 1.0f) _detectors.active_flight_confidence = 1.0f;
+  } else {
+    _detectors.active_flight_confidence -= _af_decay_rate * dt;
+    if (_detectors.active_flight_confidence < 0.0f) _detectors.active_flight_confidence = 0.0f;
+  }
 }
 
 void Autopilot::setDiveDetectorParams(float pitch_rate_threshold, float tension_threshold,
@@ -251,4 +291,15 @@ void Autopilot::setAwwDetectorParams(float angle_threshold_deg, float attack_rat
   _aww_attack_rate = attack_rate;
   _aww_decay_rate = decay_rate;
   _aww_wind_alpha = wind_alpha;
+}
+
+void Autopilot::setActiveFlightDetectorParams(float pitch_min_deg, float line_length_min_m,
+                                              float tension_min_n, float variation_threshold,
+                                              float attack_rate, float decay_rate) {
+  _af_pitch_min = pitch_min_deg;
+  _af_line_length_min = line_length_min_m;
+  _af_tension_min = tension_min_n;
+  _af_variation_threshold = variation_threshold;
+  _af_attack_rate = attack_rate;
+  _af_decay_rate = decay_rate;
 }

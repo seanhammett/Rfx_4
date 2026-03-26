@@ -10,6 +10,7 @@ struct DetectorState {
   float aww_confidence = 0.0f;       // 0.0 - 1.0: confidence that kite is away from wind
   float wind_direction_deg = 0.0f;   // estimated prevailing wind direction (degrees)
   float aww_angle_offset_deg = 0.0f; // current angular offset from wind (degrees)
+  float active_flight_confidence = 0.0f; // 0.0 - 1.0: confidence that kite is actively flying
 };
 
 class Autopilot {
@@ -49,7 +50,7 @@ public:
 
   // ===== Detectors =====
   // Call updateDetectors() each cycle with IMU data, independent of autopilot enable state
-  void updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float dt);
+  void updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float line_length_m, float dt);
   const DetectorState& getDetectors() const { return _detectors; }
   
   // Detector configuration
@@ -57,6 +58,9 @@ public:
                               float attack_rate, float decay_rate);
   void setAwwDetectorParams(float angle_threshold_deg, float attack_rate, float decay_rate,
                             float wind_alpha);
+  void setActiveFlightDetectorParams(float pitch_min_deg, float line_length_min_m,
+                                     float tension_min_n, float variation_threshold,
+                                     float attack_rate, float decay_rate);
 
 private:
   bool _enabled = false;
@@ -112,6 +116,24 @@ private:
   float _wind_sin_avg = 0.0f;   // EMA of sin(yaw) for circular mean
   float _wind_cos_avg = 0.0f;   // EMA of cos(yaw) for circular mean
   bool  _wind_initialized = false;
+
+  // Active-flight detector parameters (defaults from detector_params.h)
+  float _af_pitch_min = AF_PITCH_MIN;
+  float _af_line_length_min = AF_LINE_LENGTH_MIN;
+  float _af_tension_min = AF_TENSION_MIN;
+  float _af_variation_threshold = AF_VARIATION_THRESHOLD;
+  float _af_attack_rate = AF_ATTACK_RATE;
+  float _af_decay_rate = AF_DECAY_RATE;
+  float _af_variation_alpha = AF_VARIATION_ALPHA;
+  // EMA-smoothed values for variation tracking
+  float _af_pitch_ema = 0.0f;
+  float _af_yaw_ema = 0.0f;
+  float _af_tension_ema = 0.0f;
+  // EMA-smoothed absolute deviation (variation)
+  float _af_pitch_var = 0.0f;
+  float _af_yaw_var = 0.0f;
+  float _af_tension_var = 0.0f;
+  bool  _af_initialized = false;
 };
 
 #endif // AUTOPILOT_H

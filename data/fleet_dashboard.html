@@ -144,6 +144,7 @@
             <div class="status-bar">
                 <span class="status-pill ${remoteActive ? 'active' : ''}">Remote</span>
                 <span class="status-pill ${targetSeeking ? 'active' : ''}">Target Seek</span>
+                <span class="status-pill ${(t.detectors && t.detectors.active_flight_confidence > 0.5) ? 'active' : ''}">Flying</span>
                 ${fault > 0 ? '<span class="status-pill" style="background:#4a2a2a;color:#f88">Fault 0x' + fault.toString(16).toUpperCase() + '</span>' : ''}
             </div>`;
         } else if (!k.online) {

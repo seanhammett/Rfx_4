@@ -18,4 +18,13 @@
 #define AWW_DECAY_RATE              1.0f   // /s    — confidence fall rate when facing wind
 #define AWW_WIND_ALPHA              0.005f // EMA smoothing for prevailing wind estimate (small = slower)
 
+// Active-flight detector
+#define AF_PITCH_MIN                5.0f   // deg   — pitch must be above this to be "flying"
+#define AF_LINE_LENGTH_MIN          1.0f   // m     — line must be longer than this
+#define AF_TENSION_MIN              0.3f   // N     — minimum tension to consider flying
+#define AF_VARIATION_THRESHOLD      2.0f   // combined variation score threshold (pitch + yaw + tension)
+#define AF_ATTACK_RATE              1.0f   // /s    — confidence rise rate
+#define AF_DECAY_RATE               0.5f   // /s    — confidence fall rate (slow decay for stability)
+#define AF_VARIATION_ALPHA          0.05f  // EMA smoothing for variation tracking
+
 #endif // DETECTOR_PARAMS_H

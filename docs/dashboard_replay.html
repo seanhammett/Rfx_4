@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
-        body { font-family: Arial; margin: 12px; background: #242424; }
+        body { font-family: Arial; margin: 12px; background: #500000; }
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { color: #ffffff; }
         .card { background: #242424; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
@@ -169,6 +169,13 @@
                             </div>
                             <span id="awwConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">Flight:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="activeFlightBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="activeFlightValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -240,6 +247,13 @@
     let windInitialized = false;
     let awwPrevTimestampMs = null;
 
+    // --- Active-Flight Detector State ---
+    let afConfidence = 0;
+    let afPitchEma = 0, afYawEma = 0, afTensionEma = 0;
+    let afPitchVar = 0, afYawVar = 0, afTensionVar = 0;
+    let afInitialized = false;
+    let afPrevTimestampMs = null;
+
     // --- Wind Direction Rolling Average ---
     const WIND_DIRECTION_SAMPLES = 300;
     let windYawBuffer = [];
@@ -286,6 +300,15 @@
     let AWW_DECAY_RATE = 1.0;
     let AWW_WIND_ALPHA = 0.005;
 
+    // Active-flight detector parameters — defaults match include/detector_params.h
+    let AF_PITCH_MIN = 5.0;
+    let AF_LINE_LENGTH_MIN = 1.0;
+    let AF_TENSION_MIN = 0.3;
+    let AF_VARIATION_THRESHOLD = 2.0;
+    let AF_ATTACK_RATE = 1.0;
+    let AF_DECAY_RATE = 0.5;
+    let AF_VARIATION_ALPHA = 0.05;
+
     // Try to load detector params from the ESP32 that served this page.
     // Skip the fetch if running standalone (file:// or localhost) — defaults are fine there.
     (async function loadDetectorParams() {
@@ -322,6 +345,12 @@
                 if (d.aww_attack_rate !== undefined)           AWW_ATTACK_RATE = d.aww_attack_rate;
                 if (d.aww_decay_rate !== undefined)            AWW_DECAY_RATE = d.aww_decay_rate;
                 if (d.aww_wind_alpha !== undefined)            AWW_WIND_ALPHA = d.aww_wind_alpha;
+                if (d.af_pitch_min !== undefined)              AF_PITCH_MIN = d.af_pitch_min;
+                if (d.af_line_length_min !== undefined)        AF_LINE_LENGTH_MIN = d.af_line_length_min;
+                if (d.af_tension_min !== undefined)            AF_TENSION_MIN = d.af_tension_min;
+                if (d.af_variation_threshold !== undefined)    AF_VARIATION_THRESHOLD = d.af_variation_threshold;
+                if (d.af_attack_rate !== undefined)            AF_ATTACK_RATE = d.af_attack_rate;
+                if (d.af_decay_rate !== undefined)             AF_DECAY_RATE = d.af_decay_rate;
                 statusEl.textContent = 'params: from firmware';
                 statusEl.style.color = '#4CAF50';
                 statusEl.style.borderColor = '#4CAF50';
@@ -386,8 +415,9 @@
                 { label:'Tension (N)',      data:[], borderColor:'#5ab5ff', backgroundColor:'rgba(90,181,255,0.1)',  borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y'  },
                 { label:'Pitch (°)',        data:[], borderColor:'#ffb85c', backgroundColor:'rgba(255,184,92,0.1)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y1' },
                 { label:'Line Length (m)',  data:[], borderColor:'#E5E5E5', backgroundColor:'rgba(229,229,229,0.05)', borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y2' },
-                { label:'Dive Confidence',  data:[], borderColor:'#f44336', backgroundColor:'rgba(244,67,54,0.1)',   borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y3' }
-            ]},
+                { label:'Dive Confidence',       data:[], borderColor:'#f44336', backgroundColor:'rgba(244,67,54,0.1)',   borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y3' },
+                { label:'Active Flight Conf.',   data:[], borderColor:'#00E676', backgroundColor:'rgba(0,230,118,0.1)',  borderWidth:2, fill:true, tension:0.4, pointRadius:0, yAxisID:'y3' }
+            ]}, 
             options: {
                 responsive:true, maintainAspectRatio:false,
                 plugins:{ legend:{ display:false } },
@@ -533,6 +563,79 @@
         awwPrevTimestampMs = null;
     }
 
+    // Compute-only active-flight detector update (mirrors C++ autopilot logic)
+    function updateActiveFlightDetector(row) {
+        const pitch   = row['Pitch_deg'];
+        const yaw     = row['Yaw_deg'];
+        const tension = row['Tension_N'];
+        const lineLen = row['Line_Length_m'];
+        const timestamp = row['Timestamp_ms'];
+
+        let dt_s = 0.033;
+        if (afPrevTimestampMs !== null && timestamp > afPrevTimestampMs) {
+            dt_s = (timestamp - afPrevTimestampMs) / 1000.0;
+            if (dt_s > 0.5) dt_s = 0.5;
+        }
+        afPrevTimestampMs = timestamp;
+
+        if (!afInitialized) {
+            afPitchEma   = pitch;
+            afYawEma     = yaw;
+            afTensionEma = tension;
+            afPitchVar   = 0;
+            afYawVar     = 0;
+            afTensionVar = 0;
+            afInitialized = true;
+        } else {
+            afPitchEma   += AF_VARIATION_ALPHA * (pitch   - afPitchEma);
+            afYawEma     += AF_VARIATION_ALPHA * (yaw     - afYawEma);
+            afTensionEma += AF_VARIATION_ALPHA * (tension - afTensionEma);
+            afPitchVar   += AF_VARIATION_ALPHA * (Math.abs(pitch   - afPitchEma)   - afPitchVar);
+            afYawVar     += AF_VARIATION_ALPHA * (Math.abs(yaw     - afYawEma)     - afYawVar);
+            afTensionVar += AF_VARIATION_ALPHA * (Math.abs(tension - afTensionEma) - afTensionVar);
+        }
+
+        const variationScore = afPitchVar + afYawVar + (afTensionVar / Math.max(AF_TENSION_MIN, 0.01));
+        const flying = variationScore > AF_VARIATION_THRESHOLD &&
+                       pitch   > AF_PITCH_MIN &&
+                       lineLen > AF_LINE_LENGTH_MIN &&
+                       tension > AF_TENSION_MIN;
+
+        if (flying) {
+            afConfidence += AF_ATTACK_RATE * dt_s;
+            if (afConfidence > 1.0) afConfidence = 1.0;
+        } else {
+            afConfidence -= AF_DECAY_RATE * dt_s;
+            if (afConfidence < 0.0) afConfidence = 0.0;
+        }
+    }
+
+    // Render active-flight confidence to the DOM
+    function renderActiveFlightDetectorUI() {
+        const pct = Math.round(afConfidence * 100);
+        setText('activeFlightValue', pct + '%');
+        const bar = document.getElementById('activeFlightBar');
+        bar.style.width = pct + '%';
+        if (afConfidence < 0.3) {
+            bar.style.backgroundColor = '#4CAF50';
+        } else if (afConfidence < 0.6) {
+            bar.style.backgroundColor = '#2196F3';
+        } else if (afConfidence < 0.8) {
+            bar.style.backgroundColor = '#00BCD4';
+        } else {
+            bar.style.backgroundColor = '#00E676';
+        }
+    }
+
+    // Reset active-flight detector state
+    function resetActiveFlightDetector() {
+        afConfidence  = 0;
+        afPitchEma    = 0; afYawEma = 0; afTensionEma = 0;
+        afPitchVar    = 0; afYawVar = 0; afTensionVar = 0;
+        afInitialized = false;
+        afPrevTimestampMs = null;
+    }
+
     // Update dashboard UI from a CSV row (values are pre-parsed numerics)
     function updateDashboard(row) {
         setText('joystickInput', formatValue(row['Remote_Joy'], 4, 0, true));
@@ -567,25 +670,28 @@
         updateKite3D(row);
     }
 
-    // Dashboard + dive detector + UI render (used by non-playback callers)
+    // Dashboard + all detectors + UI render (used by non-playback callers)
     function updateDashboardFull(row) {
         updateDiveDetector(row);
         updateAwwDetector(row);
+        updateActiveFlightDetector(row);
         updateDashboard(row);
         renderDiveDetectorUI();
         renderAwwDetectorUI();
+        renderActiveFlightDetectorUI();
     }
 
     // Append data to chart arrays (fast — no rendering)
     let chartMaxLineLength = 0;
     // Cache chart array references (set after initChart)
-    let cLabels, cD0, cD1, cD2, cD3;
+    let cLabels, cD0, cD1, cD2, cD3, cD4;
     function cacheChartArrays() {
         cLabels = chart.data.labels;
         cD0 = chart.data.datasets[0].data;
         cD1 = chart.data.datasets[1].data;
         cD2 = chart.data.datasets[2].data;
         cD3 = chart.data.datasets[3].data;
+        cD4 = chart.data.datasets[4].data;
     }
 
     // Push one row into chart arrays (no trim, no render)
@@ -597,6 +703,7 @@
         const l = row['Line_Length_m'];
         cD2.push(l);
         cD3.push(Math.round(diveConfidence * 100));
+        cD4.push(Math.round(afConfidence * 100));
         if (l > chartMaxLineLength) chartMaxLineLength = l;
     }
 
@@ -609,6 +716,7 @@
         cD1.splice(0, excess);
         const removed = cD2.splice(0, excess);
         cD3.splice(0, excess);
+        cD4.splice(0, excess);
         // Recompute max only if we removed the current max
         let needRecompute = false;
         for (let j = 0; j < removed.length; j++) {
@@ -688,6 +796,7 @@
                 for (let i = batchStart; i < playbackIndex; i++) {
                     updateDiveDetector(csvRows[i]);
                     updateAwwDetector(csvRows[i]);
+                    updateActiveFlightDetector(csvRows[i]);
                     appendChartData(csvRows[i]);
                 }
                 trimChartData();
@@ -696,6 +805,7 @@
                 updateDashboard(lastRow);
                 renderDiveDetectorUI();
                 renderAwwDetectorUI();
+                renderActiveFlightDetectorUI();
                 flushChart();
 
                 let skippedThisFrame = Math.max(0, batchSize - 1);
@@ -743,6 +853,7 @@
         document.getElementById('playhead').value = 0;
         resetDiveDetector();
         resetAwwDetector();
+        resetActiveFlightDetector();
         resetWindBuffer();
     }
 
@@ -755,6 +866,7 @@
         // and collect chart data for the last chartMaxPoints rows
         resetDiveDetector();
         resetAwwDetector();
+        resetActiveFlightDetector();
         resetWindBuffer();
         chart.data.labels = [];
         chart.data.datasets.forEach(ds => ds.data = []);
@@ -765,12 +877,14 @@
         for (let i = 0; i < chartStart && i < csvRows.length; i++) {
             updateDiveDetector(csvRows[i]);
             updateAwwDetector(csvRows[i]);
+            updateActiveFlightDetector(csvRows[i]);
             addWindYawSample(csvRows[i]['Yaw_deg']);
         }
         // From chartStart onward: update detector AND push chart data
         for (let i = chartStart; i <= playbackIndex && i < csvRows.length; i++) {
             updateDiveDetector(csvRows[i]);
             updateAwwDetector(csvRows[i]);
+            updateActiveFlightDetector(csvRows[i]);
             addWindYawSample(csvRows[i]['Yaw_deg']);
             const row = csvRows[i];
             cLabels.push('');
@@ -779,6 +893,7 @@
             const l = row['Line_Length_m'];
             cD2.push(l);
             cD3.push(Math.round(diveConfidence * 100));
+            cD4.push(Math.round(afConfidence * 100));
             if (l > chartMaxLineLength) chartMaxLineLength = l;
         }
         const padding = Math.max(chartMaxLineLength * 0.15, 0.5);
@@ -787,6 +902,7 @@
         updateDashboard(csvRows[playbackIndex]);
         renderDiveDetectorUI();
         renderAwwDetectorUI();
+        renderActiveFlightDetectorUI();
     });
 
     // File input handler

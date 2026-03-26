@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
-        body { font-family: Arial; margin: 212x; background: #242424; }
+        body { font-family: Arial; margin: 212x; background: #34235e; }
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { color: #ffffff; }
         .card { background: #242424; padding: 12px; border-radius: 5px; border: 1px solid #ddd; }
@@ -91,6 +91,13 @@
                                 <div id="awwConfidenceBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
                             </div>
                             <span id="awwConfidenceValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color:#fff; min-width: 40px;">Flight:</span>
+                            <div style="flex: 1; height: 16px; background: #333; border-radius: 3px; overflow: hidden;">
+                                <div id="activeFlightBar" style="height: 100%; width: 0%; background: #4CAF50; transition: width 0.2s, background-color 0.2s;"></div>
+                            </div>
+                            <span id="activeFlightValue" style="color:#5ab5ff; min-width: 35px; text-align: right;">0%</span>
                         </div>
                     </div>
                 </div>
@@ -545,6 +552,21 @@ function updateCards(data) {
             awwBar.style.backgroundColor = '#FF9800';
         } else {
             awwBar.style.backgroundColor = '#f44336';
+        }
+
+        const afConf = data.detectors.active_flight_confidence || 0;
+        const afPct = Math.round(afConf * 100);
+        document.getElementById('activeFlightValue').textContent = afPct + '%';
+        const afBar = document.getElementById('activeFlightBar');
+        afBar.style.width = afPct + '%';
+        if (afConf < 0.3) {
+            afBar.style.backgroundColor = '#4CAF50';
+        } else if (afConf < 0.6) {
+            afBar.style.backgroundColor = '#2196F3';
+        } else if (afConf < 0.8) {
+            afBar.style.backgroundColor = '#00BCD4';
+        } else {
+            afBar.style.backgroundColor = '#00E676';
         }
     }
 }
