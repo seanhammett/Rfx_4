@@ -193,6 +193,7 @@
                     <h3>Autopilot</h3>
                     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
                         <div><span style="color:#fff;">Enabled:</span> <span id="apEnabled" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Mode:</span> <span id="apMode" style="color:#5ab5ff;">&mdash;</span></div>
                         <div><span style="color:#fff;">Slack:</span> <span id="apSlack" style="color:#5ab5ff;">No</span></div>
                         <div><span style="color:#fff;">Target:</span> <span id="apTarget" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
                         <div><span style="color:#fff;">Max Vel:</span> <span id="apMaxVel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s</span></div>
@@ -373,7 +374,8 @@
 
     // Numeric CSV fields to pre-parse at load time
     const NUMERIC_FIELDS = ['Timestamp_ms','Tension_N','Line_Length_m','Pitch_deg','Yaw_deg',
-                            'Remote_Joy','Commanded_Vel_rps','Target_Length_m'];
+                            'Remote_Joy','Commanded_Vel_rps','Target_Length_m',
+                            'Wind_Dir_deg','AWW_Offset_deg','Filtered_Torque_Nm','AP_Mode'];
 
     // Parse CSV text into array of objects with pre-parsed numerics
     function parseCSV(text) {
@@ -650,8 +652,12 @@
         document.getElementById('faultAlert').style.display = 'none';
         document.getElementById('motorStatusCard').style.borderColor = '#ddd';
         // Autopilot (simple)
+        const AP_MODE_NAMES = ['DISABLED','HOLDING','SLACK','DIVE_RECOVERY','AWW_RETURN'];
+        const apModeVal = row['AP_Mode'];
+        const apModeName = (apModeVal !== undefined && AP_MODE_NAMES[apModeVal]) ? AP_MODE_NAMES[apModeVal] : (row['Target_Enabled'] === '1' ? 'HOLDING' : 'DISABLED');
         setText('apEnabled', row['Target_Enabled'] === '1' ? 'Yes' : 'No');
-        setText('apSlack', 'No');
+        setText('apMode', apModeName);
+        setText('apSlack', apModeName === 'SLACK' ? 'Yes' : 'No');
         setText('apTarget', formatValue(row['Target_Length_m'], 5, 2, false));
         setText('apMaxVel', formatValue(row['Commanded_Vel_rps'], 4, 1, false));
         setText('apAccel', '—');

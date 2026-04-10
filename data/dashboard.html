@@ -117,6 +117,7 @@
                     <h3>Autopilot</h3>
                     <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
                         <div><span style="color:#fff;">Enabled:</span> <span id="apEnabled" style="color:#5ab5ff;">No</span></div>
+                        <div><span style="color:#fff;">Mode:</span> <span id="apMode" style="color:#5ab5ff;">&mdash;</span></div>
                         <div><span style="color:#fff;">Slack:</span> <span id="apSlack" style="color:#5ab5ff;">No</span></div>
                         <div><span style="color:#fff;">Target:</span> <span id="apTarget" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">m</span></div>
                         <div><span style="color:#fff;">Max Vel:</span> <span id="apMaxVel" style="color:#5ab5ff;">&mdash;</span> <span style="color:#fff;">r/s</span></div>
@@ -513,6 +514,7 @@ function updateCards(data) {
         const smt = data.autopilot.slack_min_torque / SPOOL_RADIUS_M;
         const sxt = data.autopilot.slack_max_torque / SPOOL_RADIUS_M;
         document.getElementById('apEnabled').textContent    = data.autopilot.enabled ? 'Yes' : 'No';
+        document.getElementById('apMode').textContent        = data.autopilot.mode_name || 'DISABLED';
         document.getElementById('apSlack').textContent      = data.autopilot.slack ? 'Yes' : 'No';
         document.getElementById('apTarget').textContent     = formatValue(data.autopilot.target, 5, 2, false);
         document.getElementById('apMaxVel').textContent     = formatValue(data.autopilot.max_velocity, 4, 1, false);

@@ -27,6 +27,10 @@ struct FlightSample {
     float dive_conf;
     float aww_conf;
     float af_conf;
+    float wind_direction_deg;
+    float aww_angle_offset_deg;
+    float filtered_torque_nm;
+    uint8_t autopilot_mode;
 };
 
 // Commands sent from main loop to writer task via queue

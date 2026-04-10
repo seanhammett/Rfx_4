@@ -4,6 +4,17 @@
 #include <Arduino.h>
 #include "detector_params.h"
 
+// ===== Autopilot Modes =====
+enum class AutopilotMode : uint8_t {
+  AP_DISABLED      = 0,
+  AP_HOLDING       = 1,
+  AP_SLACK         = 2,
+  AP_DIVE_RECOVERY = 3,
+  AP_AWW_RETURN    = 4
+};
+
+const char* autopilotModeName(AutopilotMode mode);
+
 // ===== Detector Results =====
 struct DetectorState {
   float dive_confidence = 0.0f;      // 0.0 - 1.0: confidence that kite is diving
@@ -47,6 +58,9 @@ public:
   float getCurrentVelocityRPS() const { return _current_velocity_rps; }
 
   float getFilteredTorque() const { return _filtered_torque; }
+
+  // ===== State machine =====
+  AutopilotMode getMode() const { return _mode; }
 
   // ===== Detectors =====
   // Call updateDetectors() each cycle with IMU data, independent of autopilot enable state
@@ -97,8 +111,29 @@ private:
   void _updateMetersPerRev();
   float _distanceToRevolutions(float meters) const;
 
+  // ===== State machine =====
+  AutopilotMode _mode = AutopilotMode::AP_DISABLED;
+  AutopilotMode _prev_mode = AutopilotMode::AP_DISABLED;
+  unsigned long _mode_entered_ms = 0;
+
+  void _evaluateStateTransitions(float current_line_length_m);
+  float _updateHolding(float current_line_length_m, float dt);
+  float _updateSlack(float dt);
+  float _updateDiveRecovery(float dt);
+  float _updateAwwReturn(float dt);
+
+  // State transition thresholds
+  float _dive_recovery_enter = DIVE_RECOVERY_CONFIDENCE_ENTER;
+  float _dive_recovery_exit = DIVE_RECOVERY_CONFIDENCE_EXIT;
+  float _dive_recovery_retract_rps = DIVE_RECOVERY_RETRACT_RPS;
+  float _dive_recovery_max_pitch = DIVE_RECOVERY_MAX_PITCH;
+  float _aww_return_enter = AWW_RETURN_CONFIDENCE_ENTER;
+  float _aww_return_exit = AWW_RETURN_CONFIDENCE_EXIT;
+  float _aww_return_retract_rps = AWW_RETURN_RETRACT_RPS;
+
   // ===== Detectors =====
   DetectorState _detectors;
+  float _last_pitch_deg = 0.0f;  // stored from updateDetectors() for use in state handlers
   
   // Dive detector parameters (defaults from detector_params.h)
   float _dive_pitch_rate_threshold = DIVE_PITCH_RATE_THRESHOLD;

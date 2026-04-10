@@ -601,6 +601,8 @@ void setup() {
     doc["autopilot"]["enabled"] = autopilot.isEnabled();
     doc["autopilot"]["slack"] = autopilot.isSlackDetected();
     doc["autopilot"]["target"] = autopilot.getTargetLineLength();
+    doc["autopilot"]["mode"] = static_cast<uint8_t>(autopilot.getMode());
+    doc["autopilot"]["mode_name"] = autopilotModeName(autopilot.getMode());
     doc["autopilot"]["max_velocity"] = MAX_VELOCITY_RPS;
     doc["autopilot"]["accel"] = 1.0;
     doc["autopilot"]["decel"] = 5.0;
@@ -1171,6 +1173,10 @@ void loop() {
       fs.dive_conf = det.dive_confidence;
       fs.aww_conf = det.aww_confidence;
       fs.af_conf = det.active_flight_confidence;
+      fs.wind_direction_deg = det.wind_direction_deg;
+      fs.aww_angle_offset_deg = det.aww_angle_offset_deg;
+      fs.filtered_torque_nm = autopilot.getFilteredTorque();
+      fs.autopilot_mode = static_cast<uint8_t>(autopilot.getMode());
       flightLogger.update(det.active_flight_confidence, fs);
     }
     

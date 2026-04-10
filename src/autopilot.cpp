@@ -1,5 +1,17 @@
 #include "autopilot.h"
 
+// ===== Mode name helper =====
+const char* autopilotModeName(AutopilotMode mode) {
+  switch (mode) {
+    case AutopilotMode::AP_DISABLED:      return "DISABLED";
+    case AutopilotMode::AP_HOLDING:       return "HOLDING";
+    case AutopilotMode::AP_SLACK:         return "SLACK";
+    case AutopilotMode::AP_DIVE_RECOVERY: return "DIVE_RECOVERY";
+    case AutopilotMode::AP_AWW_RETURN:    return "AWW_RETURN";
+    default:                           return "UNKNOWN";
+  }
+}
+
 // ===== Internal helpers =====
 
 void Autopilot::_updateMetersPerRev() {
@@ -58,6 +70,9 @@ void Autopilot::enable() {
     _slack_detected = false;
     _slack_duration_s = 0.0;
     _torque_filter_initialized = false;
+    _mode = AutopilotMode::AP_HOLDING;
+    _prev_mode = AutopilotMode::AP_HOLDING;
+    _mode_entered_ms = millis();
     Serial.printf("[Autopilot] ENABLED  target=%.2f m\n", _target_line_length);
   }
 }
@@ -69,6 +84,7 @@ void Autopilot::disable() {
     _slack_detected = false;
     _slack_duration_s = 0.0;
     _torque_filter_initialized = false;
+    _mode = AutopilotMode::AP_DISABLED;
     Serial.println("[Autopilot] DISABLED");
   }
 }
@@ -87,10 +103,9 @@ void Autopilot::adjustTarget(float rate_mps, float dt) {
 float Autopilot::update(float current_line_length_m, float current_torque_nm, float dt) {
   if (!_enabled) {
     _current_velocity_rps = 0.0;
+    _mode = AutopilotMode::AP_DISABLED;
     return 0.0;
   }
-
-  float desired_velocity_rps = 0.0;
 
   // --- Filter torque (EMA) ---
   if (!_torque_filter_initialized) {
@@ -100,8 +115,7 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
     _filtered_torque += _torque_filter_alpha * (current_torque_nm - _filtered_torque);
   }
 
-  // --- Slack detection with hysteresis (using filtered torque) ---
-  bool was_slack = _slack_detected;
+  // --- Update slack detection flags (used by state transitions) ---
   if (_slack_detected) {
     if (_filtered_torque >= _slack_torque_exit) {
       _slack_detected = false;
@@ -112,53 +126,32 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
     }
   }
 
-  if (_slack_detected) {
-    // Accumulate slack duration for speed ramp
-    _slack_duration_s += dt;
+  // --- Evaluate state transitions (priority-ordered) ---
+  _evaluateStateTransitions(current_line_length_m);
 
-    // Ramp retract speed: min → max over _slack_ramp_time_s (rev/s)
-    float ramp_t = min(_slack_duration_s / _slack_ramp_time_s, 1.0f);
-    float reel_speed = _slack_reel_min_rps + ramp_t * (_slack_reel_max_rps - _slack_reel_min_rps);
-
-    // Reel in (positive velocity = retract)
-    desired_velocity_rps = reel_speed;
-
-    static unsigned long lastSlackMsg = 0;
-    if (millis() - lastSlackMsg > 500) {
-      Serial.printf("[Autopilot] SLACK (%.1fs) torque=%.4f Nm — reeling at %.2f rev/s (ramp %.0f%%)\n",
-                    _slack_duration_s, current_torque_nm, reel_speed, ramp_t * 100.0f);
-      lastSlackMsg = millis();
-    }
-  } else {
-    if (was_slack) {
-      Serial.printf("[Autopilot] Tension restored after %.1fs slack — resuming target seek to %.2f m\n",
-                    _slack_duration_s, _target_line_length);
-      _slack_duration_s = 0.0;
-    }
-
-    // --- Normal target seeking ---
-    float line_length_error = _target_line_length - current_line_length_m;
-
-    if (fabs(line_length_error) > _deadband_m) {
-      // Convert distance to revolutions for kinematic calc
-      float distance_rev = _distanceToRevolutions(fabs(line_length_error));
-      // Kinematic limit: v = sqrt(2 * a * d) in rev/s
-      float max_safe_vel = sqrtf(2.0f * _acceleration_rps2 * distance_rev);
-      float clamped_vel = min(max_safe_vel, _max_velocity_rps);
-
-      // Positive error means target is longer → unspool (negative vel)
-      // Negative error means target is shorter → retract (positive vel)
-      desired_velocity_rps = (line_length_error > 0) ? -clamped_vel : clamped_vel;
-    }
+  // --- Run active state handler ---
+  float desired_velocity_rps = 0.0;
+  switch (_mode) {
+    case AutopilotMode::AP_SLACK:
+      desired_velocity_rps = _updateSlack(dt);
+      break;
+    case AutopilotMode::AP_DIVE_RECOVERY:
+      desired_velocity_rps = _updateDiveRecovery(dt);
+      break;
+    case AutopilotMode::AP_AWW_RETURN:
+      desired_velocity_rps = _updateAwwReturn(dt);
+      break;
+    case AutopilotMode::AP_HOLDING:
+    default:
+      desired_velocity_rps = _updateHolding(current_line_length_m, dt);
+      break;
   }
 
   // --- Acceleration / deceleration limiting ---
-  // During slack, skip the accel limiter — the slack ramp already controls speed-up rate.
-  // Only apply accel limiting for normal target seeking and slack recovery.
-  if (_slack_detected) {
+  if (_mode == AutopilotMode::AP_SLACK) {
     _current_velocity_rps = desired_velocity_rps;
   } else {
-    if (was_slack && !_slack_detected) {
+    if (_prev_mode == AutopilotMode::AP_SLACK && _mode != AutopilotMode::AP_SLACK) {
       _slack_recovering = true;
     }
     if (_slack_recovering && fabs(_current_velocity_rps - desired_velocity_rps) < 0.01f) {
@@ -178,9 +171,120 @@ float Autopilot::update(float current_line_length_m, float current_torque_nm, fl
   return _current_velocity_rps;
 }
 
+// ===== State transition evaluation (priority-ordered) =====
+
+void Autopilot::_evaluateStateTransitions(float current_line_length_m) {
+  AutopilotMode new_mode = _mode;
+
+  // Priority 1: SLACK — always wins
+  if (_slack_detected) {
+    new_mode = AutopilotMode::AP_SLACK;
+  }
+  // Priority 2: DIVE_RECOVERY
+  else if (_detectors.dive_confidence >= _dive_recovery_enter) {
+    new_mode = AutopilotMode::AP_DIVE_RECOVERY;
+  }
+  // Priority 3: AWW_RETURN
+  else if (_detectors.aww_confidence >= _aww_return_enter) {
+    new_mode = AutopilotMode::AP_AWW_RETURN;
+  }
+  // Exit conditions for current state → fall back to HOLDING
+  else {
+    switch (_mode) {
+      case AutopilotMode::AP_DIVE_RECOVERY:
+        if (_detectors.dive_confidence < _dive_recovery_exit) {
+          new_mode = AutopilotMode::AP_HOLDING;
+        } else {
+          new_mode = _mode; // stay in dive recovery
+        }
+        break;
+      case AutopilotMode::AP_AWW_RETURN:
+        if (_detectors.aww_confidence < _aww_return_exit) {
+          new_mode = AutopilotMode::AP_HOLDING;
+        } else {
+          new_mode = _mode; // stay in aww return
+        }
+        break;
+      default:
+        new_mode = AutopilotMode::AP_HOLDING;
+        break;
+    }
+  }
+
+  // Log transitions
+  if (new_mode != _mode) {
+    Serial.printf("[Autopilot] %s -> %s (dive=%.2f aww=%.2f slack=%d)\n",
+                  autopilotModeName(_mode), autopilotModeName(new_mode),
+                  _detectors.dive_confidence, _detectors.aww_confidence, _slack_detected);
+    _prev_mode = _mode;
+    _mode = new_mode;
+    _mode_entered_ms = millis();
+
+    // Reset slack duration on entry/exit
+    if (_mode == AutopilotMode::AP_SLACK) {
+      _slack_duration_s = 0.0;
+    }
+  }
+}
+
+// ===== State handlers =====
+
+float Autopilot::_updateHolding(float current_line_length_m, float dt) {
+  float line_length_error = _target_line_length - current_line_length_m;
+
+  if (fabs(line_length_error) > _deadband_m) {
+    float distance_rev = _distanceToRevolutions(fabs(line_length_error));
+    float max_safe_vel = sqrtf(2.0f * _acceleration_rps2 * distance_rev);
+    float clamped_vel = min(max_safe_vel, _max_velocity_rps);
+
+    // Positive error → target longer → unspool (negative vel)
+    // Negative error → target shorter → retract (positive vel)
+    return (line_length_error > 0) ? -clamped_vel : clamped_vel;
+  }
+  return 0.0f;
+}
+
+float Autopilot::_updateSlack(float dt) {
+  _slack_duration_s += dt;
+
+  float ramp_t = min(_slack_duration_s / _slack_ramp_time_s, 1.0f);
+  float reel_speed = _slack_reel_min_rps + ramp_t * (_slack_reel_max_rps - _slack_reel_min_rps);
+
+  static unsigned long lastSlackMsg = 0;
+  if (millis() - lastSlackMsg > 500) {
+    Serial.printf("[Autopilot] SLACK (%.1fs) torque=%.4f Nm — reeling at %.2f rev/s (ramp %.0f%%)\n",
+                  _slack_duration_s, _filtered_torque, reel_speed, ramp_t * 100.0f);
+    lastSlackMsg = millis();
+  }
+
+  return reel_speed; // positive = retract
+}
+
+float Autopilot::_updateDiveRecovery(float dt) {
+  // Retract at controlled rate, but scale down as pitch approaches vertical
+  // to prevent kite from going overhead
+  float speed = _dive_recovery_retract_rps;
+
+  if (_last_pitch_deg > _dive_recovery_max_pitch) {
+    // Linear ramp-down: full speed at max_pitch, zero at 90°
+    float remaining = max(0.0f, 90.0f - _last_pitch_deg);
+    float range = max(1.0f, 90.0f - _dive_recovery_max_pitch);
+    speed *= (remaining / range);
+  }
+
+  return speed;
+}
+
+float Autopilot::_updateAwwReturn(float dt) {
+  // Gentle retract — shortening line increases tension, pulling kite back toward wind window
+  return _aww_return_retract_rps;
+}
+
 // ===== Detectors =====
 
 void Autopilot::updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float line_length_m, float dt) {
+  _last_pitch_deg = pitch_deg;
+
   // --- Dive detector ---
 
   // Filter pitch velocity with EMA for smoother detection
