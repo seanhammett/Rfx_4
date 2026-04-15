@@ -24,6 +24,7 @@ enum FleetMsgType : uint8_t {
   MSG_FLEET_ACK      = 3,  // Host assigns kite_id (host → kite)
   MSG_REMOTE_DISCOVER= 4,  // Remote requests fleet roster (remote → broadcast)
   MSG_FLEET_ROSTER   = 5,  // Host responds with roster (host → remote)
+  MSG_KITE_IMU       = 6,  // Kite-mounted IMU data (CodeCell → kite controller)
 };
 
 // ===== Kite Identity Slot =====
@@ -85,5 +86,21 @@ typedef struct __attribute__((packed)) {
   uint8_t command;
   uint8_t button;
 } LegacyControlMsg;
+
+// ===== Kite IMU Data (CodeCell on kite → kite controller) =====
+typedef struct __attribute__((packed)) {
+  uint8_t msg_type;      // MSG_KITE_IMU
+  float roll;            // degrees (game rotation, no magnetometer)
+  float pitch;           // degrees
+  float yaw;             // degrees
+  float gyro_x;          // degrees/sec
+  float gyro_y;          // degrees/sec
+  float gyro_z;          // degrees/sec
+  float accel_x;         // m/s²
+  float accel_y;         // m/s²
+  float accel_z;         // m/s²
+  uint8_t battery_pct;   // 0-100 battery level, 101=charging, 102=USB
+  uint8_t sequence;      // rolling packet counter for drop detection
+} KiteImuMsg;            // 39 bytes
 
 #endif // FLEET_PROTOCOL_H

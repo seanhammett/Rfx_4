@@ -85,6 +85,19 @@ volatile bool newRemoteDiscover = false;
 FleetDiscoverMsg pendingDiscover;
 uint8_t discoverSenderMAC[6];               // MAC of remote that sent discover
 
+// ===== Kite-Mounted IMU (CodeCell, received via ESP-NOW) =====
+struct KiteImuData {
+  float roll, pitch, yaw;
+  float gyro_x, gyro_y, gyro_z;
+  float accel_x, accel_y, accel_z;
+  uint8_t battery_pct;
+  uint8_t last_sequence;
+  unsigned long lastReceived_ms;
+  bool valid;
+};
+volatile KiteImuData kiteImu = {};
+static const unsigned long KITE_IMU_STALE_MS = 200;  // Mark invalid after 200ms with no packets
+
 // ===== Timing & Control Constants =====
 const unsigned long MOTION_INTERVAL = 10;        // Update every 10ms (100Hz)
 const unsigned long REMOTE_TIMEOUT_MS = 300;      // Remote considered active for 300ms after last command
@@ -354,6 +367,25 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
       }
       break;
 
+    case MSG_KITE_IMU:
+      if (data_len >= sizeof(KiteImuMsg)) {
+        const KiteImuMsg* msg = (const KiteImuMsg*)data;
+        kiteImu.roll = msg->roll;
+        kiteImu.pitch = msg->pitch;
+        kiteImu.yaw = msg->yaw;
+        kiteImu.gyro_x = msg->gyro_x;
+        kiteImu.gyro_y = msg->gyro_y;
+        kiteImu.gyro_z = msg->gyro_z;
+        kiteImu.accel_x = msg->accel_x;
+        kiteImu.accel_y = msg->accel_y;
+        kiteImu.accel_z = msg->accel_z;
+        kiteImu.battery_pct = msg->battery_pct;
+        kiteImu.last_sequence = msg->sequence;
+        kiteImu.lastReceived_ms = millis();
+        kiteImu.valid = true;
+      }
+      break;
+
     default:
       break;
   }
@@ -617,6 +649,17 @@ void setup() {
     doc["imu"]["yaw_velocity"] = imu.yaw_velocity;
     doc["imu"]["pitch_velocity"] = imu.pitch_velocity;
     
+    // Kite-mounted IMU (CodeCell BNO085)
+    bool kiteImuValid = kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS);
+    doc["kite_imu"]["connected"] = kiteImuValid;
+    doc["kite_imu"]["pitch"] = kiteImu.pitch;
+    doc["kite_imu"]["roll"] = kiteImu.roll;
+    doc["kite_imu"]["yaw"] = kiteImu.yaw;
+    doc["kite_imu"]["gyro_x"] = kiteImu.gyro_x;
+    doc["kite_imu"]["gyro_y"] = kiteImu.gyro_y;
+    doc["kite_imu"]["gyro_z"] = kiteImu.gyro_z;
+    doc["kite_imu"]["battery"] = kiteImu.battery_pct;
+
     // Detectors
     const DetectorState& detectors = autopilot.getDetectors();
     doc["detectors"]["dive_confidence"] = detectors.dive_confidence;
@@ -1151,6 +1194,25 @@ void loop() {
       float det_dt = MOTION_INTERVAL / 1000.0;
       autopilot.updateDetectors(imu.pitch, imu.pitch_velocity, imu.yaw, det_tension, line_length, det_dt);
 
+      // Feed kite-mounted IMU data to autopilot (available for future detector use)
+      {
+        bool fresh = kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS);
+        KiteImuInput ki = {};
+        if (fresh) {
+          ki.pitch = kiteImu.pitch;
+          ki.roll = kiteImu.roll;
+          ki.yaw = kiteImu.yaw;
+          ki.gyro_x = kiteImu.gyro_x;
+          ki.gyro_y = kiteImu.gyro_y;
+          ki.gyro_z = kiteImu.gyro_z;
+          ki.accel_x = kiteImu.accel_x;
+          ki.accel_y = kiteImu.accel_y;
+          ki.accel_z = kiteImu.accel_z;
+          ki.valid = true;
+        }
+        autopilot.updateKiteImu(ki);
+      }
+
       // Update flight logger
       const DetectorState& det = autopilot.getDetectors();
       FlightSample fs = {};
@@ -1171,6 +1233,17 @@ void loop() {
       fs.dive_conf = det.dive_confidence;
       fs.aww_conf = det.aww_confidence;
       fs.af_conf = det.active_flight_confidence;
+      // Kite-mounted IMU (CodeCell)
+      bool kiteImuFresh = kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS);
+      if (kiteImuFresh) {
+        fs.kite_pitch_deg = kiteImu.pitch;
+        fs.kite_roll_deg = kiteImu.roll;
+        fs.kite_yaw_deg = kiteImu.yaw;
+        fs.kite_gyro_x = kiteImu.gyro_x;
+        fs.kite_gyro_y = kiteImu.gyro_y;
+        fs.kite_gyro_z = kiteImu.gyro_z;
+        fs.kite_imu_battery = kiteImu.battery_pct;
+      }
       flightLogger.update(det.active_flight_confidence, fs);
     }
     

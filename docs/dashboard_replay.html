@@ -178,6 +178,15 @@
                         </div>
                     </div>
                 </div>
+                <div class="card" id="kiteImuCard" style="display:none;">
+                    <h3>Kite IMU <span id="kiteImuStatus" style="font-size:10px; color:#888;">&#x25cf;</span></h3>
+                    <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                        <div><span style="color:#fff;">Pitch:</span> <span id="kiteImuPitch" style="color:#ffb85c;">—</span></div>
+                        <div><span style="color:#fff;">Roll:</span> <span id="kiteImuRoll" style="color:#ffb85c;">—</span></div>
+                        <div><span style="color:#fff;">Yaw:</span> <span id="kiteImuYaw" style="color:#ffb85c;">—</span></div>
+                        <div><span style="color:#fff;">Batt:</span> <span id="kiteImuBatt" style="color:#ffb85c;">—</span></div>
+                    </div>
+                </div>
             </div>
             <!-- Middle column: Autopilot + Recording -->
             <div style="flex: 0 0 180px; display: flex; flex-direction: column; gap: 20px;">
@@ -373,7 +382,9 @@
 
     // Numeric CSV fields to pre-parse at load time
     const NUMERIC_FIELDS = ['Timestamp_ms','Tension_N','Line_Length_m','Pitch_deg','Yaw_deg',
-                            'Remote_Joy','Commanded_Vel_rps','Target_Length_m'];
+                            'Remote_Joy','Commanded_Vel_rps','Target_Length_m',
+                            'Kite_Pitch_deg','Kite_Roll_deg','Kite_Yaw_deg',
+                            'Kite_Gyro_X','Kite_Gyro_Y','Kite_Gyro_Z','Kite_IMU_Battery'];
 
     // Parse CSV text into array of objects with pre-parsed numerics
     function parseCSV(text) {
@@ -666,6 +677,18 @@
         // Playback date/time
         setText('playbackDate', row['Date'] || '—');
         setText('playbackTime', row['Time'] || '—');
+        // Kite-mounted IMU (CodeCell)
+        const hasKiteImu = row['Kite_Pitch_deg'] !== undefined && row['Kite_Pitch_deg'] !== '';
+        const card = document.getElementById('kiteImuCard');
+        if (hasKiteImu) {
+            card.style.display = 'block';
+            document.getElementById('kiteImuStatus').style.color = '#00E676';
+            setText('kiteImuPitch', formatValue(row['Kite_Pitch_deg'], 5, 1, true) + '\u00b0');
+            setText('kiteImuRoll',  formatValue(row['Kite_Roll_deg'], 5, 1, true) + '\u00b0');
+            setText('kiteImuYaw',   formatValue(row['Kite_Yaw_deg'], 6, 1, false) + '\u00b0');
+            const batt = row['Kite_IMU_Battery']||0;
+            setText('kiteImuBatt', batt > 100 ? (batt===101?'Charging':'USB') : batt + '%');
+        }
         // Update 3D kite
         updateKite3D(row);
     }

@@ -13,6 +13,14 @@ struct DetectorState {
   float active_flight_confidence = 0.0f; // 0.0 - 1.0: confidence that kite is actively flying
 };
 
+// ===== Kite-Mounted IMU Input (CodeCell BNO085, received via ESP-NOW) =====
+struct KiteImuInput {
+  float pitch, roll, yaw;            // degrees (game rotation, no magnetometer)
+  float gyro_x, gyro_y, gyro_z;     // degrees/sec
+  float accel_x, accel_y, accel_z;  // m/s²
+  bool valid;                        // false if stale or never received
+};
+
 class Autopilot {
 public:
   // ===== Configuration (call before enable or anytime) =====
@@ -52,6 +60,10 @@ public:
   // Call updateDetectors() each cycle with IMU data, independent of autopilot enable state
   void updateDetectors(float pitch_deg, float pitch_velocity_dps, float yaw_deg, float tension_n, float line_length_m, float dt);
   const DetectorState& getDetectors() const { return _detectors; }
+  
+  // Kite-mounted IMU: store latest data for future detector use
+  void updateKiteImu(const KiteImuInput& input);
+  const KiteImuInput& getKiteImu() const { return _kite_imu; }
   
   // Detector configuration
   void setDiveDetectorParams(float pitch_rate_threshold_dps, float tension_threshold_n, 
@@ -134,6 +146,9 @@ private:
   float _af_yaw_var = 0.0f;
   float _af_tension_var = 0.0f;
   bool  _af_initialized = false;
+
+  // Kite-mounted IMU data (stored for future detector use)
+  KiteImuInput _kite_imu = {};
 };
 
 #endif // AUTOPILOT_H

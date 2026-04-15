@@ -303,3 +303,7 @@ void Autopilot::setActiveFlightDetectorParams(float pitch_min_deg, float line_le
   _af_attack_rate = attack_rate;
   _af_decay_rate = decay_rate;
 }
+
+void Autopilot::updateKiteImu(const KiteImuInput& input) {
+  _kite_imu = input;
+}
