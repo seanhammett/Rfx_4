@@ -1094,7 +1094,7 @@ void printStatus() {
   // Highlight torque loss condition
   const char* torque_status = "";
   if (commanded_velocity != 0.0 && result.torque == 0.0) {
-    torque_status = " ⚠️TORQUE_LOSS";
+    torque_status = "TORQUE_LOSS";
   }
   
   char status_line[512];
@@ -1119,8 +1119,10 @@ void printStatus() {
   }
   
   snprintf(status_line + pos, sizeof(status_line) - pos,
-          " | P%+5.1f*(%+4.1f*/s) Y%+5.1f*(%+4.1f*/s)",
-          imu.pitch, imu.pitch_velocity, imu.yaw, imu.yaw_velocity);
+          " | P%+5.1f*(%+4.1f*/s) Y%+5.1f*(%+4.1f*/s) | K:P%+5.1f R%+5.1f%s",
+          imu.pitch, imu.pitch_velocity, imu.yaw, imu.yaw_velocity,
+          kiteImu.pitch, kiteImu.roll,
+          (kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS)) ? "" : " X");
   
   Serial.println(status_line);
 }

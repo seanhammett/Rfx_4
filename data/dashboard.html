@@ -63,6 +63,14 @@
                     <h3>Yaw</h3>
                     <div class="value" id="yaw" style="text-align: right;">0.0&deg;</div>
                 </div>
+                <div class="card" id="kitePitchCard" style="display:none;">
+                    <h3>Kite Pitch</h3>
+                    <div class="value" id="kitePitchValue" style="text-align: right; color:#ffb85c;">—</div>
+                </div>
+                <div class="card" id="kiteRollCard" style="display:none;">
+                    <h3>Kite Roll</h3>
+                    <div class="value" id="kiteRollValue" style="text-align: right; color:#ffb85c;">—</div>
+                </div>
                 <div class="card">
                     <h3>Line Length</h3>
                     <div class="value" id="lineLength" style="text-align: right;">0.00 m</div>
@@ -592,12 +600,18 @@ function updateCards(data) {
             document.getElementById('kiteImuYaw').textContent   = formatValue(ki.yaw||0, 6, 1, false) + '\u00b0';
             const batt = ki.battery||0;
             document.getElementById('kiteImuBatt').textContent  = batt > 100 ? (batt===101?'Charging':'USB') : batt + '%';
+            document.getElementById('kitePitchCard').style.display = 'block';
+            document.getElementById('kiteRollCard').style.display = 'block';
+            document.getElementById('kitePitchValue').textContent = formatValue(ki.pitch||0, 5, 1, true) + '\u00b0';
+            document.getElementById('kiteRollValue').textContent  = formatValue(ki.roll||0, 5, 1, true) + '\u00b0';
         } else {
             dot.style.color = '#f44336';
             document.getElementById('kiteImuPitch').textContent = '\u2014';
             document.getElementById('kiteImuRoll').textContent  = '\u2014';
             document.getElementById('kiteImuYaw').textContent   = '\u2014';
             document.getElementById('kiteImuBatt').textContent  = '\u2014';
+            document.getElementById('kitePitchCard').style.display = 'none';
+            document.getElementById('kiteRollCard').style.display = 'none';
         }
     }
 }

@@ -15,7 +15,7 @@ const char* WIFI_PASS = "sonoma1991";
 // Target kite controller MAC address (unicast)
 // Set this to the MAC of the kite controller this CodeCell is paired with.
 // Find it from the kite controller's serial output on boot.
-static const uint8_t TARGET_KITE_MAC[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+static const uint8_t TARGET_KITE_MAC[6] = { 0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C }; //  3C:84:27:FC:C8:9C - bodgy board in purple tether
 
 // Transmission rate
 static const uint8_t IMU_RATE_HZ = 50;
@@ -140,9 +140,13 @@ void loop() {
       myCodeCell.LED_SetBrightness(3);  // dim green via Run() default
     }
 
-    // Serial readout every cycle (temporary debug)
-    Serial.printf("[IMU] P%+6.1f R%+6.1f Y%+6.1f | G(%+6.1f,%+6.1f,%+6.1f) | A(%+5.2f,%+5.2f,%+5.2f) | Batt:%d | OK:%lu Fail:%lu\n",
-                  pitch, roll, yaw, gx, gy, gz, ax, ay, az,
-                  (int)msg.battery_pct, successCount, failCount);
+    // Periodic serial status (every 5 seconds)
+    static unsigned long lastStatusPrint = 0;
+    if (millis() - lastStatusPrint >= 5000) {
+      lastStatusPrint = millis();
+      Serial.printf("[IMU] P%+6.1f R%+6.1f Y%+6.1f | G(%+6.1f,%+6.1f,%+6.1f) | A(%+5.2f,%+5.2f,%+5.2f) | Batt:%d | OK:%lu Fail:%lu\n",
+                    pitch, roll, yaw, gx, gy, gz, ax, ay, az,
+                    (int)msg.battery_pct, successCount, failCount);
+    }
   }
 }
