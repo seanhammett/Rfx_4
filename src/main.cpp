@@ -108,9 +108,9 @@ const float LINE_LENGTH_DEADBAND = 0.01;          // 1cm deadband for target see
 unsigned long lastMotionUpdate = 0;
 const float MAX_VELOCITY_RPS = 8.0;  // Maximum velocity: 8.0 revolutions per second
 const float MAX_TORQUE = 2.0;  // Max torque in Nm (adjust as needed)
-const float MIN_TENSION_TORQUE = 0.015;  // Minimum torque (Nm) required to allow line extension
-const float FULL_TENSION_TORQUE = 0.08;  // Torque (Nm) above which full unspool speed is allowed
-const float MIN_UNSPOOL_SPEED = 0.5;     // Minimum unspool speed (rev/s) at MIN_TENSION_TORQUE threshold
+const float MIN_TENSION_TORQUE = 0.03;  // Minimum torque (Nm) required to allow line extension
+const float FULL_TENSION_TORQUE = 0.2; // Torque (Nm) above which full unspool speed is allowed
+const float MIN_UNSPOOL_SPEED = 0.05;     // Minimum unspool speed (rev/s) at MIN_TENSION_TORQUE threshold
 
 // Line length tracking
 const float SPOOL_DIAMETER = 68.0;  // Spool diameter in mm

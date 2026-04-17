@@ -84,6 +84,10 @@
                     <div class="value" id="lineTension" style="text-align: right;">0.0 N</div>
                 </div>
                 <div class="card">
+                    <h3>Motor Torque</h3>
+                    <div class="value" id="motorTorque" style="text-align: right;">0.000 Nm</div>
+                </div>
+                <div class="card">
                     <h3>Detectors</h3>
                     <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -497,6 +501,7 @@ function updateCards(data) {
     document.getElementById('joystickInput').textContent   = formatValue(data.joystick.remote_command||0, 4, 0, true);
     document.getElementById('lineSpeedReq').textContent    = formatValue(cv*METERS_PER_REV, 5, 2, true) + ' m/s';
     document.getElementById('lineTension').textContent     = formatValue(data.motor.tension||0, 4, 1, false) + ' N';
+    document.getElementById('motorTorque').textContent      = formatValue(data.motor.torque||0, 5, 3, false) + ' Nm';
     document.getElementById('lineLength').textContent      = formatValue(data.line_length||0, 6, 2, false) + ' m';
     document.getElementById('pitch').textContent           = formatValue(data.imu.pitch||0, 5, 1, true) + '\u00b0';
     document.getElementById('yaw').textContent             = formatValue(normalizeAngle(data.imu.yaw||0), 6, 1, false) + '\u00b0';
