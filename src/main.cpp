@@ -87,9 +87,7 @@ uint8_t discoverSenderMAC[6];               // MAC of remote that sent discover
 
 // ===== Kite-Mounted IMU (CodeCell, received via ESP-NOW) =====
 struct KiteImuData {
-  float roll, pitch, yaw;
-  float gyro_x, gyro_y, gyro_z;
-  float accel_x, accel_y, accel_z;
+  float pitch, roll;
   uint8_t battery_pct;
   uint8_t last_sequence;
   unsigned long lastReceived_ms;
@@ -99,18 +97,22 @@ volatile KiteImuData kiteImu = {};
 static const unsigned long KITE_IMU_STALE_MS = 200;  // Mark invalid after 200ms with no packets
 
 // ===== Timing & Control Constants =====
-const unsigned long MOTION_INTERVAL = 10;        // Update every 10ms (100Hz)
+const unsigned long MOTION_INTERVAL = 8;        // Update every 8ms (125Hz)
 const unsigned long REMOTE_TIMEOUT_MS = 300;      // Remote considered active for 300ms after last command
 const int DEBUG_PRINT_CYCLES = 25;                // Print debug every 25 cycles (500ms at 50Hz)
 const float LINE_LENGTH_DEADBAND = 0.01;          // 1cm deadband for target seeking
 
 // ===== Motion Control Variables =====
 unsigned long lastMotionUpdate = 0;
+unsigned long lastLoopUs = 0;       // micros() at start of previous loop iteration
+unsigned long loopInterval_us = 0;  // measured loop-to-loop interval
+unsigned long motionBlockUs = 0;    // time spent inside the motion control block
 const float MAX_VELOCITY_RPS = 8.0;  // Maximum velocity: 8.0 revolutions per second
 const float MAX_TORQUE = 2.0;  // Max torque in Nm (adjust as needed)
-const float MIN_TENSION_TORQUE = 0.03;  // Minimum torque (Nm) required to allow line extension
+const float MIN_TENSION_TORQUE = 0.016;  // Minimum torque (Nm) required to allow line extension
 const float FULL_TENSION_TORQUE = 0.2; // Torque (Nm) above which full unspool speed is allowed
 const float MIN_UNSPOOL_SPEED = 0.05;     // Minimum unspool speed (rev/s) at MIN_TENSION_TORQUE threshold
+const float UNSPOOL_ACCEL_RPS2 = 8.0;    // Max unspool ramp-up rate (rev/s per second)
 
 // Line length tracking
 const float SPOOL_DIAMETER = 68.0;  // Spool diameter in mm
@@ -370,15 +372,8 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
     case MSG_KITE_IMU:
       if (data_len >= sizeof(KiteImuMsg)) {
         const KiteImuMsg* msg = (const KiteImuMsg*)data;
-        kiteImu.roll = msg->roll;
         kiteImu.pitch = msg->pitch;
-        kiteImu.yaw = msg->yaw;
-        kiteImu.gyro_x = msg->gyro_x;
-        kiteImu.gyro_y = msg->gyro_y;
-        kiteImu.gyro_z = msg->gyro_z;
-        kiteImu.accel_x = msg->accel_x;
-        kiteImu.accel_y = msg->accel_y;
-        kiteImu.accel_z = msg->accel_z;
+        kiteImu.roll = msg->roll;
         kiteImu.battery_pct = msg->battery_pct;
         kiteImu.last_sequence = msg->sequence;
         kiteImu.lastReceived_ms = millis();
@@ -654,10 +649,6 @@ void setup() {
     doc["kite_imu"]["connected"] = kiteImuValid;
     doc["kite_imu"]["pitch"] = kiteImu.pitch;
     doc["kite_imu"]["roll"] = kiteImu.roll;
-    doc["kite_imu"]["yaw"] = kiteImu.yaw;
-    doc["kite_imu"]["gyro_x"] = kiteImu.gyro_x;
-    doc["kite_imu"]["gyro_y"] = kiteImu.gyro_y;
-    doc["kite_imu"]["gyro_z"] = kiteImu.gyro_z;
     doc["kite_imu"]["battery"] = kiteImu.battery_pct;
 
     // Detectors
@@ -981,31 +972,52 @@ void applySafetyLimits() {
   // Below MIN_TENSION_TORQUE: block completely
   // Between MIN and FULL_TENSION_TORQUE: ramp max allowed speed from MIN_UNSPOOL_SPEED to full
   // Above FULL_TENSION_TORQUE: allow full commanded speed
+  static float unspool_ramp_speed = 0.0f;  // Ramped unspool speed limit (resets on tension loss)
+
   if (commanded_velocity < 0) {
-    float torque = abs(result.torque);
+    // Only positive torque = real line tension (negative = motor driving the spool)
+    float torque = (result.torque > 0.0) ? (float)result.torque : 0.0f;
+    float dt = MOTION_INTERVAL / 1000.0f;
+
     if (torque < MIN_TENSION_TORQUE) {
+      // No tension: block and reset ramp
+      unspool_ramp_speed = 0.0f;
+      commanded_velocity = 0.0;
       static unsigned long lastTensionWarning = 0;
-      if (millis() - lastTensionWarning > 1000) {
-        Serial.printf("[WARNING] BLOCKED unspool: torque too low (%.3f Nm < %.3f Nm)\n",
+      if (millis() - lastTensionWarning > 500) {
+        Serial.printf("[BLOCKED] unspool: torque %.3f Nm < %.3f Nm\n",
                       torque, MIN_TENSION_TORQUE);
         lastTensionWarning = millis();
       }
-      commanded_velocity = 0.0;
-    } else if (torque < FULL_TENSION_TORQUE) {
-      // Linearly scale max allowed unspool speed with tension
-      float t = (torque - MIN_TENSION_TORQUE) / (FULL_TENSION_TORQUE - MIN_TENSION_TORQUE);
-      float max_speed = MIN_UNSPOOL_SPEED + t * (MAX_VELOCITY_RPS - MIN_UNSPOOL_SPEED);
-      if (abs(commanded_velocity) > max_speed) {
-        commanded_velocity = -max_speed;
+    } else {
+      // Tension present: calculate max speed allowed by tension level
+      float tension_max;
+      if (torque < FULL_TENSION_TORQUE) {
+        float t = (torque - MIN_TENSION_TORQUE) / (FULL_TENSION_TORQUE - MIN_TENSION_TORQUE);
+        tension_max = MIN_UNSPOOL_SPEED + t * (MAX_VELOCITY_RPS - MIN_UNSPOOL_SPEED);
+      } else {
+        tension_max = MAX_VELOCITY_RPS;
       }
+
+      // Ramp up gradually toward tension-allowed speed (resets to 0 on any tension loss)
+      unspool_ramp_speed += UNSPOOL_ACCEL_RPS2 * dt;
+      if (unspool_ramp_speed > tension_max) unspool_ramp_speed = tension_max;
+
+      // Clamp commanded velocity to the ramped limit
+      if (fabs(commanded_velocity) > unspool_ramp_speed) {
+        commanded_velocity = -unspool_ramp_speed;
+      }
+
       static unsigned long lastRampInfo = 0;
-      if (millis() - lastRampInfo > 1000) {
-        Serial.printf("[SPEED] Unspool speed limited: torque=%.3f Nm, max_speed=%.1f rev/s (%.0f%%)\\n",
-                      torque, max_speed, t * 100.0);
+      if (millis() - lastRampInfo > 500) {
+        Serial.printf("[RAMP] tq=%.3f max=%.1f ramp=%.1f cmd=%.1f\n",
+                      torque, tension_max, unspool_ramp_speed, commanded_velocity);
         lastRampInfo = millis();
       }
     }
-    // else torque >= FULL_TENSION_TORQUE: allow full commanded speed
+  } else {
+    // Not unspooling: reset ramp so next unspool starts from zero
+    unspool_ramp_speed = 0.0f;
   }
   
   // Block retraction if line length is at or below zero (bypassed in respool mode)
@@ -1118,16 +1130,25 @@ void printStatus() {
     pos += snprintf(status_line + pos, sizeof(status_line) - pos, " | FAULT=0x%02X", result.fault);
   }
   
-  snprintf(status_line + pos, sizeof(status_line) - pos,
+  pos += snprintf(status_line + pos, sizeof(status_line) - pos,
           " | P%+5.1f*(%+4.1f*/s) Y%+5.1f*(%+4.1f*/s) | K:P%+5.1f R%+5.1f%s",
           imu.pitch, imu.pitch_velocity, imu.yaw, imu.yaw_velocity,
           kiteImu.pitch, kiteImu.roll,
           (kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS)) ? "" : " X");
-  
+
+  snprintf(status_line + pos, sizeof(status_line) - pos,
+          " | Loop:%luus Mot:%luus",
+          loopInterval_us, motionBlockUs);
+
   Serial.println(status_line);
 }
 
 void loop() {
+  // ===== Loop timing =====
+  unsigned long nowUs = micros();
+  if (lastLoopUs != 0) loopInterval_us = nowUs - lastLoopUs;
+  lastLoopUs = nowUs;
+
   // ===== Fleet Host Duties =====
   if (isFleetHost) {
     // Periodic heartbeat broadcast
@@ -1163,9 +1184,10 @@ void loop() {
   processRemoteCommands();
   imu.update();
   
-  // ===== Motion Control (50Hz) =====
+  // ===== Motion Control =====
   if (millis() - lastMotionUpdate >= MOTION_INTERVAL) {
     lastMotionUpdate = millis();
+    unsigned long motionStartUs = micros();
     
     bool remoteActive = isRemoteActive();
     
@@ -1203,13 +1225,6 @@ void loop() {
         if (fresh) {
           ki.pitch = kiteImu.pitch;
           ki.roll = kiteImu.roll;
-          ki.yaw = kiteImu.yaw;
-          ki.gyro_x = kiteImu.gyro_x;
-          ki.gyro_y = kiteImu.gyro_y;
-          ki.gyro_z = kiteImu.gyro_z;
-          ki.accel_x = kiteImu.accel_x;
-          ki.accel_y = kiteImu.accel_y;
-          ki.accel_z = kiteImu.accel_z;
           ki.valid = true;
         }
         autopilot.updateKiteImu(ki);
@@ -1240,10 +1255,6 @@ void loop() {
       if (kiteImuFresh) {
         fs.kite_pitch_deg = kiteImu.pitch;
         fs.kite_roll_deg = kiteImu.roll;
-        fs.kite_yaw_deg = kiteImu.yaw;
-        fs.kite_gyro_x = kiteImu.gyro_x;
-        fs.kite_gyro_y = kiteImu.gyro_y;
-        fs.kite_gyro_z = kiteImu.gyro_z;
         fs.kite_imu_battery = kiteImu.battery_pct;
       }
       flightLogger.update(det.active_flight_confidence, fs);
@@ -1251,8 +1262,9 @@ void loop() {
     
     applySafetyLimits();
     sendMotorCommand();
+    motionBlockUs = micros() - motionStartUs;
     printStatus();
   }
   
-  delay(1);
+  // delay(1); // remove to debug unspooling issues
 }

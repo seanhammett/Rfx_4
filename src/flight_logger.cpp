@@ -10,8 +10,7 @@ static const char* CSV_HEADER =
     "Torque_Nm,Tension_N,Line_Length_m,Target_Enabled,Target_Length_m,"
     "Remote_Joy,Remote_Active,Pitch_deg,Pitch_Vel_dps,Yaw_deg,"
     "Yaw_Vel_dps,Roll_deg,Dive_Conf,AWW_Conf,AF_Conf,"
-    "Kite_Pitch_deg,Kite_Roll_deg,Kite_Yaw_deg,"
-    "Kite_Gyro_X,Kite_Gyro_Y,Kite_Gyro_Z,Kite_IMU_Battery\n";
+    "Kite_Pitch_deg,Kite_Roll_deg,Kite_IMU_Battery\n";
 
 // Queue depth: enough to buffer ~1s of samples at FL_LOG_RATE_HZ + commands
 static const int QUEUE_DEPTH = FL_LOG_RATE_HZ * 2 + 4;
@@ -157,7 +156,7 @@ void FlightLogger::_handleSample(const FlightSample& sample) {
     char row[384];
     int len = snprintf(row, sizeof(row),
         "%s,%s,%lu,%u,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,"
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%u\n",
+        "%.4f,%.4f,%u\n",
         date_str, time_str, (unsigned long)ts, _kite_id,
         sample.commanded_vel_rps, sample.actual_vel_rps,
         sample.torque_nm, sample.tension_n, sample.line_length_m,
@@ -166,8 +165,7 @@ void FlightLogger::_handleSample(const FlightSample& sample) {
         sample.pitch_deg, sample.pitch_vel_dps,
         sample.yaw_deg, sample.yaw_vel_dps, sample.roll_deg,
         sample.dive_conf, sample.aww_conf, sample.af_conf,
-        sample.kite_pitch_deg, sample.kite_roll_deg, sample.kite_yaw_deg,
-        sample.kite_gyro_x, sample.kite_gyro_y, sample.kite_gyro_z,
+        sample.kite_pitch_deg, sample.kite_roll_deg,
         (unsigned)sample.kite_imu_battery);
 
     if (len <= 0 || len >= (int)sizeof(row)) return;

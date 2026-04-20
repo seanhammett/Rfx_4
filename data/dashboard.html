@@ -118,7 +118,6 @@
                     <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
                         <div><span style="color:#fff;">Pitch:</span> <span id="kiteImuPitch" style="color:#ffb85c;">—</span></div>
                         <div><span style="color:#fff;">Roll:</span> <span id="kiteImuRoll" style="color:#ffb85c;">—</span></div>
-                        <div><span style="color:#fff;">Yaw:</span> <span id="kiteImuYaw" style="color:#ffb85c;">—</span></div>
                         <div><span style="color:#fff;">Batt:</span> <span id="kiteImuBatt" style="color:#ffb85c;">—</span></div>
                     </div>
                 </div>
@@ -291,7 +290,7 @@ function toggleRecording() {
 function updateSampleCount() { document.getElementById('sampleCount').textContent = csvData.length + ' samples'; }
 
 function buildCSV() {
-    let csv = 'Date,Time,Timestamp_ms,Kite_ID,Commanded_Vel_rps,Actual_Vel_rps,Torque_Nm,Tension_N,Line_Length_m,Target_Enabled,Target_Length_m,Remote_Joy,Remote_Active,Pitch_deg,Pitch_Vel_dps,Yaw_deg,Yaw_Vel_dps,Roll_deg,Dive_Conf,AWW_Conf,AF_Conf,Kite_Pitch_deg,Kite_Roll_deg,Kite_Yaw_deg,Kite_Gyro_X,Kite_Gyro_Y,Kite_Gyro_Z,Kite_IMU_Battery\n';
+    let csv = 'Date,Time,Timestamp_ms,Kite_ID,Commanded_Vel_rps,Actual_Vel_rps,Torque_Nm,Tension_N,Line_Length_m,Target_Enabled,Target_Length_m,Remote_Joy,Remote_Active,Pitch_deg,Pitch_Vel_dps,Yaw_deg,Yaw_Vel_dps,Roll_deg,Dive_Conf,AWW_Conf,AF_Conf,Kite_Pitch_deg,Kite_Roll_deg,Kite_IMU_Battery\n';
     csvData.forEach(row => { csv += row.join(',') + '\n'; });
     return csv;
 }
@@ -602,7 +601,6 @@ function updateCards(data) {
             dot.style.color = '#00E676';
             document.getElementById('kiteImuPitch').textContent = formatValue(ki.pitch||0, 5, 1, true) + '\u00b0';
             document.getElementById('kiteImuRoll').textContent  = formatValue(ki.roll||0, 5, 1, true) + '\u00b0';
-            document.getElementById('kiteImuYaw').textContent   = formatValue(ki.yaw||0, 6, 1, false) + '\u00b0';
             const batt = ki.battery||0;
             document.getElementById('kiteImuBatt').textContent  = batt > 100 ? (batt===101?'Charging':'USB') : batt + '%';
             document.getElementById('kitePitchCard').style.display = 'block';
@@ -613,7 +611,6 @@ function updateCards(data) {
             dot.style.color = '#f44336';
             document.getElementById('kiteImuPitch').textContent = '\u2014';
             document.getElementById('kiteImuRoll').textContent  = '\u2014';
-            document.getElementById('kiteImuYaw').textContent   = '\u2014';
             document.getElementById('kiteImuBatt').textContent  = '\u2014';
             document.getElementById('kitePitchCard').style.display = 'none';
             document.getElementById('kiteRollCard').style.display = 'none';
@@ -688,10 +685,6 @@ async function pollKite(endpoint) {
                 (data.detectors.active_flight_confidence||0).toFixed(3),
                 (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.pitch||0).toFixed(4) : ''),
                 (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.roll||0).toFixed(4) : ''),
-                (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.yaw||0).toFixed(4) : ''),
-                (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.gyro_x||0).toFixed(4) : ''),
-                (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.gyro_y||0).toFixed(4) : ''),
-                (data.kite_imu&&data.kite_imu.connected ? (data.kite_imu.gyro_z||0).toFixed(4) : ''),
                 (data.kite_imu ? (data.kite_imu.battery||0) : '')
             ]);
             updateSampleCount();

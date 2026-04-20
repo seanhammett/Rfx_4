@@ -15,9 +15,7 @@ struct DetectorState {
 
 // ===== Kite-Mounted IMU Input (CodeCell BNO085, received via ESP-NOW) =====
 struct KiteImuInput {
-  float pitch, roll, yaw;            // degrees (game rotation, no magnetometer)
-  float gyro_x, gyro_y, gyro_z;     // degrees/sec
-  float accel_x, accel_y, accel_z;  // m/s²
+  float pitch, roll;                 // degrees (game rotation, no magnetometer)
   bool valid;                        // false if stale or never received
 };
 

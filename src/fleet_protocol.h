@@ -90,17 +90,10 @@ typedef struct __attribute__((packed)) {
 // ===== Kite IMU Data (CodeCell on kite → kite controller) =====
 typedef struct __attribute__((packed)) {
   uint8_t msg_type;      // MSG_KITE_IMU
-  float roll;            // degrees (game rotation, no magnetometer)
-  float pitch;           // degrees
-  float yaw;             // degrees
-  float gyro_x;          // degrees/sec
-  float gyro_y;          // degrees/sec
-  float gyro_z;          // degrees/sec
-  float accel_x;         // m/s²
-  float accel_y;         // m/s²
-  float accel_z;         // m/s²
+  float pitch;           // degrees (game rotation, no magnetometer)
+  float roll;            // degrees
   uint8_t battery_pct;   // 0-100 battery level, 101=charging, 102=USB
   uint8_t sequence;      // rolling packet counter for drop detection
-} KiteImuMsg;            // 39 bytes
+} KiteImuMsg;            // 11 bytes
 
 #endif // FLEET_PROTOCOL_H

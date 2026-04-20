@@ -1,32 +1,200 @@
-Vel+0.00/-0.00 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.9*/s) Y+80.9*(-0.0*/s)
-Vel+0.00/+0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.6*/s) Y+80.9*(-0.9*/s)
-Vel+0.00/-0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.5*/s) Y+80.9*(-0.9*/s)
-Vel+0.00/+0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.3*/s) Y+80.9*(-0.7*/s)
-Vel+0.00/-0.01 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.0*/s) Y+80.9*(-0.5*/s)
-Vel+0.00/+0.01 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.7*/s) Y+80.9*(-0.2*/s)
-Vel+0.00/+0.01 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.3*/s) Y+80.9*(-0.2*/s)
-Vel+0.00/+0.01 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.2*/s) Y+80.9*(-0.4*/s)
-Vel+0.00/+0.00 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.1*/s) Y+80.9*(-0.4*/s)
-Vel+0.00/-0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+0.1*/s) Y+80.9*(-0.5*/s)
-Vel+0.00/-0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+0.1*/s) Y+80.9*(-0.5*/s)
-Vel+0.00/-0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+0.1*/s) Y+80.9*(-0.5*/s)
-[256590][E][vfs_api.cpp:29] open(): f0000.csv does not start with /
-Vel+0.00/+0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.3*/s) Y+80.8*(-1.1*/s)
-[FlightLog] Upload failed: f0000.csv (kept on SPIFFS)
-[256598][E][vfs_api.cpp:29] open(): f0001.csv does not start with /
-[FlightLog] Upload failed: f0001.csv (kept on SPIFFS)
-[256605][E][vfs_api.cpp:29] open(): f0002.csv does not start with /
-Vel+0.00/-0.00 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.2*/s) Y+80.7*(-2.8*/s)
-[FlightLog] Upload failed: f0002.csv (kept on SPIFFS)
-Vel+0.00/-0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+0.9*/s) Y+80.6*(-5.0*/s)
-Vel+0.00/+0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+1.0*/s) Y+80.5*(-6.3*/s)
-Vel+0.00/+0.01 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(+0.3*/s) Y+80.4*(-6.6*/s)
-Vel+0.00/-0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.1*/s) Y+80.4*(-6.0*/s)
-Vel+0.00/+0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.3*/s) Y+80.4*(-5.1*/s)
-Vel+0.00/+0.01 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.0*/s) Y+80.3*(-4.5*/s)
-Vel+0.00/-0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.2*/s) Y+80.3*(-3.8*/s)
-Vel+0.00/+0.01 | Tq+0.008 | Tn0.2N | L  3.63m | Joy:R  +0 | P -4.9*(-0.4*/s) Y+80.3*(-3.8*/s)
-Vel+0.00/-0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.5*/s) Y+80.2*(-4.2*/s)
-Vel+0.00/-0.01 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-0.9*/s) Y+80.2*(-3.6*/s)
-Vel+0.00/-0.00 | Tq+0.009 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.3*/s) Y+80.2*(-2.4*/s)
-Vel+0.00/-0.00 | Tq+0.010 | Tn0.3N | L  3.63m | Joy:R  +0 | P -4.9*(-1.0*/s) Y+80.3*(-1.2*/s
+Vel+0.00/-2.85 | Tq+0.188 | Tn5.5N | L  1.39m | Joy:R-699* | P-37.3*(-60.3*/s) Y+119.8*(+37.7*/s) | K:P +0.0 R +0.0 X | Loop:3475us Mot:1785us
+[SPEED] Unspool speed limited: torque=0.188 Nm, max_speed=7.4 rev/s (93%)\nVel-5.59/-0.08 | Tq+0.067 | Tn2.0N | L  1.39m | Joy:R-699* | P-36.6*(-5.6*/s) Y+120.2*(+38.2*/s) | K:P +0.0 R +0.0 X | Loop:3482us Mot:1792us
+[SPEED] Unspool speed limited: torque=0.067 Nm, max_speed=1.8 rev/s (22%)\nVel-1.77/-1.43 | Tq-0.299 | Tn8.8N | L  1.39m | Joy:R-699* | P-34.7*(+136.3*/s) Y+120.5*(+35.0*/s) | K:P +0.0 R +0.0 X | Loop:3482us Mot:1787us
+REMOTE control: cmd=-699 vel=-5.59
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.67 | Tq+0.057 | Tn1.7N | L  1.40m | Joy:R-699* | P-36.0*(+1.1*/s) Y+120.5*(+27.5*/s) | K:P +0.0 R +0.0 X | Loop:3479us Mot:2169us
+[SPEED] Unspool speed limited: torque=0.057 Nm, max_speed=1.3 rev/s (16%)\nVel-1.32/-1.85 | Tq+0.140 | Tn4.1N | L  1.40m | Joy:R-699* | P-36.5*(-29.1*/s) Y+120.7*(+25.5*/s) | K:P +0.0 R +0.0 X | Loop:3504us Mot:2164us
+ESP-NOW RX: cmd=0 speed=-699 btn=0
+[SPEED] Unspool speed limited: torque=0.140 Nm, max_speed=5.2 rev/s (65%)\nVel-5.21/-0.36 | Tq-0.005 | Tn0.2N | L  1.40m | Joy:R-699* | P-35.6*(+27.0*/s) Y+120.9*(+22.6*/s) | K:P +0.0 R +0.0 X | Loop:3529us Mot:1988us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.42 | Tq-0.232 | Tn6.8N | L  1.41m | Joy:R-699* | P-35.0*(+66.4*/s) Y+120.9*(+16.8*/s) | K:P +0.0 R +0.0 X | Loop:3482us Mot:1691us
+Vel+0.00/-3.42 | Tq+0.184 | Tn5.4N | L  1.41m | Joy:R-699* | P-36.1*(-29.9*/s) Y+120.9*(+13.8*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1378us
+[SPEED] Unspool speed limited: torque=0.184 Nm, max_speed=7.2 rev/s (90%)\nVel-5.59/-0.82 | Tq+0.098 | Tn2.9N | L  1.42m | Joy:R-699* | P-36.7*(-45.8*/s) Y+121.4*(+21.6*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:2071us
+[SPEED] Unspool speed limited: torque=0.098 Nm, max_speed=3.2 rev/s (40%)\nVel-3.24/-2.00 | Tq-0.259 | Tn7.6N | L  1.42m | Joy:R-699* | P-34.5*(+125.3*/s) Y+121.6*(+22.4*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:2418us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.40 | Tq+0.001 | Tn0.0N | L  1.43m | Joy:R-699* | P-35.8*(+1.1*/s) Y+121.7*(+19.0*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1770us
+[WARNING] BLOCKED unspool: torque too low (0.001 Nm < 0.030 Nm)
+Vel+0.00/-2.80 | Tq+0.194 | Tn5.7N | L  1.43m | Joy:R-699* | P-36.4*(-36.5*/s) Y+122.0*(+23.0*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1733us
+[SPEED] Unspool speed limited: torque=0.194 Nm, max_speed=7.7 rev/s (96%)\nVel-5.59/+0.01 | Tq+0.067 | Tn2.0N | L  1.43m | Joy:R-699* | P-36.5*(-19.5*/s) Y+122.5*(+31.7*/s) | K:P +0.0 R +0.0 X | Loop:3494us Mot:1789us
+[SPEED] Unspool speed limited: torque=0.067 Nm, max_speed=1.8 rev/s (22%)\nVel-1.76/-1.40 | Tq-0.296 | Tn8.7N | L  1.43m | Joy:R-699* | P-34.4*(+132.2*/s) Y+123.0*(+35.5*/s) | K:P +0.0 R +0.0 X | Loop:3475us Mot:1797us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.64 | Tq+0.057 | Tn1.7N | L  1.44m | Joy:R-699* | P-35.0*(+18.4*/s) Y+123.3*(+35.7*/s) | K:P +0.0 R +0.0 X | Loop:3478us Mot:1786us
+[SPEED] Unspool speed limited: torque=0.057 Nm, max_speed=1.3 rev/s (16%)\nVel-1.33/-1.99 | Tq+0.151 | Tn4.4N | L  1.45m | Joy:R-700* | P-36.0*(-46.4*/s) Y+123.8*(+43.0*/s) | K:P +0.0 R +0.0 X | Loop:3478us Mot:2057us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.151 Nm, max_speed=5.7 rev/s (71%)\nVel-5.60/-0.45 | Tq-0.001 | Tn0.0N | L  1.45m | Joy:R-700* | P-36.0*(-18.7*/s) Y+124.7*(+54.4*/s) | K:P +0.0 R +0.0 X | Loop:3602us Mot:1869us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.59 | Tq-0.251 | Tn7.4N | L  1.45m | Joy:R-700* | P-34.7*(+84.6*/s) Y+125.5*(+63.2*/s) | K:P +0.0 R +0.0 X | Loop:3598us Mot:1776us
+Vel+0.00/-3.65 | Tq+0.196 | Tn5.8N | L  1.46m | Joy:R-700* | P-35.2*(+4.2*/s) Y+126.2*(+67.0*/s) | K:P +0.0 R +0.0 X | Loop:3507us Mot:1340us
+[SPEED] Unspool speed limited: torque=0.196 Nm, max_speed=7.8 rev/s (97%)\nVel-5.60/-0.85 | Tq+0.101 | Tn3.0N | L  1.46m | Joy:R-700* | P-36.0*(-39.8*/s) Y+127.1*(+73.9*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1693us
+[SPEED] Unspool speed limited: torque=0.101 Nm, max_speed=3.4 rev/s (42%)\nVel-3.37/-1.69 | Tq-0.279 | Tn8.2N | L  1.46m | Joy:R-700* | P-35.5*(+18.7*/s) Y+128.0*(+80.3*/s) | K:P +0.0 R +0.0 X | Loop:3479us Mot:1790us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.27 | Tq-0.021 | Tn0.6N | L  1.47m | Joy:R-700* | P-36.0*(-30.5*/s) Y+128.7*(+80.7*/s) | K:P +0.0 R +0.0 X | Loop:3504us Mot:1741us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.07 | Tq+0.208 | Tn6.1N | L  1.48m | Joy:R-700* | P-36.9*(-67.8*/s) Y+129.4*(+83.2*/s) | K:P +0.0 R +0.0 X | Loop:3487us Mot:1789us
+Vel-5.60/-0.20 | Tq+0.078 | Tn2.3N | L  1.48m | Joy:R-700* | P-37.5*(-70.2*/s) Y+130.4*(+88.8*/s) | K:P +0.0 R +0.0 X | Loop:3472us Mot:1883us
+[SPEED] Unspool speed limited: torque=0.078 Nm, max_speed=2.3 rev/s (29%)\nVel-2.32/-1.57 | Tq-0.294 | Tn8.6N | L  1.48m | Joy:R-700* | P-35.7*(+113.4*/s) Y+131.4*(+95.3*/s) | K:P +0.0 R +0.0 X | Loop:3463us Mot:2023us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.90 | Tq+0.002 | Tn0.1N | L  1.49m | Joy:R-700* | P-36.2*(+21.6*/s) Y+132.3*(+99.3*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1793us
+Vel+0.00/-2.52 | Tq+0.173 | Tn5.1N | L  1.49m | Joy:R-700* | P-37.4*(-54.1*/s) Y+133.3*(+103.4*/s) | K:P +0.0 R +0.0 X | Loop:3518us Mot:1404us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.173 Nm, max_speed=6.7 rev/s (84%)\nVel-5.60/+0.06 | Tq+0.052 | Tn1.5N | L  1.49m | Joy:R-700* | P-38.2*(-71.1*/s) Y+134.3*(+106.6*/s) | K:P +0.0 R +0.0 X | Loop:3539us Mot:2267us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+REMOTE control: cmd=-700 vel=-5.60
+[SPEED] Unspool speed limited: torque=0.052 Nm, max_speed=1.1 rev/s (13%)\nVel-1.06/-1.74 | Tq-0.294 | Tn8.7N | L  1.50m | Joy:R-700* | P-36.6*(+95.8*/s) Y+135.2*(+105.7*/s) | K:P +0.0 R +0.0 X | Loop:3542us Mot:2121us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.67 | Tq+0.119 | Tn3.5N | L  1.50m | Joy:R-700* | P-37.7*(-13.3*/s) Y+136.0*(+102.5*/s) | K:P +0.0 R +0.0 X | Loop:3603us Mot:2208us
+[SPEED] Unspool speed limited: torque=0.119 Nm, max_speed=4.2 rev/s (52%)\nVel-4.22/-1.46 | Tq+0.122 | Tn3.6N | L  1.51m | Joy:R-700* | P-38.8*(-70.0*/s) Y+136.9*(+102.2*/s) | K:P +0.0 R +0.0 X | Loop:3498us Mot:1792us
+[SPEED] Unspool speed limited: torque=0.122 Nm, max_speed=4.4 rev/s (54%)\nVel-4.36/-1.45 | Tq-0.186 | Tn5.5N | L  1.51m | Joy:R-700* | P-39.4*(-60.9*/s) Y+137.8*(+105.4*/s) | K:P +0.0 R +0.0 X | Loop:3499us Mot:1749us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.85 | Tq-0.098 | Tn2.9N | L  1.52m | Joy:R-700* | P-40.1*(-78.5*/s) Y+138.8*(+106.5*/s) | K:P +0.0 R +0.0 X | Loop:3500us Mot:1763us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.31 | Tq+0.210 | Tn6.2N | L  1.52m | Joy:R-700* | P-41.0*(-98.0*/s) Y+139.6*(+105.2*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1795us
+Vel-5.60/-0.40 | Tq+0.087 | Tn2.6N | L  1.52m | Joy:R-700* | P-41.6*(-89.3*/s) Y+140.4*(+103.4*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1749us
+[SPEED] Unspool speed limited: torque=0.087 Nm, max_speed=2.7 rev/s (34%)\nVel-2.74/-1.51 | Tq-0.298 | Tn8.8N | L  1.53m | Joy:R-700* | P-39.6*(+120.4*/s) Y+141.2*(+100.8*/s) | K:P +0.0 R +0.0 X | Loop:3470us Mot:1760us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.03 | Tq-0.002 | Tn0.1N | L  1.53m | Joy:R-700* | P-40.1*(+30.6*/s) Y+141.9*(+95.1*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1786us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.80 | Tq+0.184 | Tn5.4N | L  1.54m | Joy:R-700* | P-41.0*(-31.7*/s) Y+142.5*(+91.5*/s) | K:P +0.0 R +0.0 X | Loop:3489us Mot:1779us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.184 Nm, max_speed=7.2 rev/s (90%)\nVel-5.60/+0.04 | Tq+0.056 | Tn1.7N | L  1.54m | Joy:R-700* | P-41.6*(-50.5*/s) Y+143.3*(+91.3*/s) | K:P +0.0 R +0.0 X | Loop:3524us Mot:2321us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.056 Nm, max_speed=1.3 rev/s (16%)\nVel-1.29/-1.68 | Tq-0.299 | Tn8.8N | L  1.54m | Joy:R-700* | P-39.5*(+138.9*/s) Y+144.1*(+90.3*/s) | K:P +0.0 R +0.0 X | Loop:3554us Mot:2027us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.73 | Tq+0.102 | Tn3.0N | L  1.55m | Joy:R-700* | P-40.2*(+26.4*/s) Y+144.7*(+87.7*/s) | K:P +0.0 R +0.0 X | Loop:3510us Mot:1669us
+[SPEED] Unspool speed limited: torque=0.102 Nm, max_speed=3.4 rev/s (43%)\nVel-3.44/-1.75 | Tq+0.137 | Tn4.0N | L  1.55m | Joy:R-700* | P-41.2*(-40.4*/s) Y+145.4*(+85.5*/s) | K:P +0.0 R +0.0 X | Loop:3472us Mot:1829us
+Vel-5.04/-1.01 | Tq-0.148 | Tn4.4N | L  1.56m | Joy:R-700* | P-41.5*(-27.8*/s) Y+146.0*(+83.1*/s) | K:P +0.0 R +0.0 X | Loop:3509us Mot:1403us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.62 | Tq-0.161 | Tn4.7N | L  1.56m | Joy:R-700* | P-41.6*(-20.5*/s) Y+146.6*(+79.7*/s) | K:P +0.0 R +0.0 X | Loop:3497us Mot:1692us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.72 | Tq+0.222 | Tn6.5N | L  1.57m | Joy:R-700* | P-42.4*(-62.9*/s) Y+147.1*(+77.0*/s) | K:P +0.0 R +0.0 X | Loop:3489us Mot:1769us
+Vel-5.60/-0.68 | Tq+0.103 | Tn3.0N | L  1.57m | Joy:R-700* | P-43.1*(-76.3*/s) Y+147.7*(+76.3*/s) | K:P +0.0 R +0.0 X | Loop:3481us Mot:1763us
+[SPEED] Unspool speed limited: torque=0.103 Nm, max_speed=3.4 rev/s (43%)\nVel-3.45/-1.57 | Tq-0.289 | Tn8.5N | L  1.57m | Joy:R-700* | P-41.3*(+115.3*/s) Y+148.3*(+76.0*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1741us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.30 | Tq-0.015 | Tn0.4N | L  1.58m | Joy:R-700* | P-41.8*(+33.6*/s) Y+148.8*(+70.4*/s) | K:P +0.0 R +0.0 X | Loop:3478us Mot:1784us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.14 | Tq+0.204 | Tn6.0N | L  1.59m | Joy:R-700* | P-42.8*(-37.9*/s) Y+149.1*(+64.4*/s) | K:P +0.0 R +0.0 X | Loop:3491us Mot:1773us
+Vel-5.60/-0.14 | Tq+0.068 | Tn2.0N | L  1.59m | Joy:R-700* | P-43.4*(-56.1*/s) Y+149.5*(+60.1*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1836us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.068 Nm, max_speed=1.8 rev/s (23%)\nVel-1.84/-1.83 | Tq-0.282 | Tn8.3N | L  1.59m | Joy:R-700* | P-41.2*(+148.4*/s) Y+149.9*(+55.9*/s) | K:P +0.0 R +0.0 X | Loop:3540us Mot:2199us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.07 | Tq+0.087 | Tn2.5N | L  1.60m | Joy:R-700* | P-41.9*(+34.6*/s) Y+150.1*(+50.5*/s) | K:P +0.0 R +0.0 X | Loop:3487us Mot:2073us
+[SPEED] Unspool speed limited: torque=0.087 Nm, max_speed=2.7 rev/s (33%)\nVel-2.69/-1.88 | Tq+0.148 | Tn4.4N | L  1.60m | Joy:R-700* | P-42.8*(-34.5*/s) Y+150.5*(+48.6*/s) | K:P +0.0 R +0.0 X | Loop:3493us Mot:1787us
+REMOTE control: cmd=-700 vel=-5.60
+[SPEED] Unspool speed limited: torque=0.148 Nm, max_speed=5.6 rev/s (70%)\nVel-5.59/-0.68 | Tq-0.114 | Tn3.3N | L  1.61m | Joy:R-700* | P-43.1*(-31.4*/s) Y+150.9*(+49.4*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:2422us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.61 | Tq-0.188 | Tn5.5N | L  1.61m | Joy:R-700* | P-43.0*(+2.0*/s) Y+151.2*(+46.5*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1766us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.94 | Tq+0.236 | Tn6.9N | L  1.62m | Joy:R-700* | P-43.8*(-49.3*/s) Y+151.5*(+45.7*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1797us
+Vel-5.60/-0.65 | Tq+0.102 | Tn3.0N | L  1.62m | Joy:R-700* | P-44.5*(-65.6*/s) Y+151.9*(+46.1*/s) | K:P +0.0 R +0.0 X | Loop:3479us Mot:1769us
+[SPEED] Unspool speed limited: torque=0.102 Nm, max_speed=3.4 rev/s (42%)\nVel-3.40/-1.70 | Tq-0.280 | Tn8.2N | L  1.62m | Joy:R-700* | P-42.4*(+143.7*/s) Y+152.3*(+46.7*/s) | K:P +0.0 R +0.0 X | Loop:3481us Mot:1725us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.46 | Tq-0.000 | Tn0.0N | L  1.63m | Joy:R-700* | P-42.9*(+48.5*/s) Y+152.7*(+45.4*/s) | K:P +0.0 R +0.0 X | Loop:3476us Mot:1787us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.94 | Tq+0.202 | Tn5.9N | L  1.64m | Joy:R-700* | P-43.9*(-27.1*/s) Y+153.1*(+46.7*/s) | K:P +0.0 R +0.0 X | Loop:3471us Mot:1728us
+Vel-5.60/-0.01 | Tq+0.063 | Tn1.9N | L  1.64m | Joy:R-700* | P-44.4*(-43.0*/s) Y+153.5*(+49.7*/s) | K:P +0.0 R +0.0 X | Loop:3474us Mot:1495us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.063 Nm, max_speed=1.6 rev/s (19%)\nVel-1.60/-1.68 | Tq-0.296 | Tn8.7N | L  1.64m | Joy:R-700* | P-42.1*(+159.6*/s) Y+154.0*(+51.8*/s) | K:P +0.0 R +0.0 X | Loop:3647us Mot:1736us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.96 | Tq+0.089 | Tn2.6N | L  1.65m | Joy:R-700* | P-42.6*(+48.9*/s) Y+154.4*(+50.5*/s) | K:P +0.0 R +0.0 X | Loop:3489us Mot:1800us
+[SPEED] Unspool speed limited: torque=0.089 Nm, max_speed=2.8 rev/s (35%)\nVel-2.81/-1.80 | Tq+0.142 | Tn4.2N | L  1.65m | Joy:R-700* | P-43.4*(-18.3*/s) Y+154.8*(+49.7*/s) | K:P +0.0 R +0.0 X | Loop:3493us Mot:2334us
+[SPEED] Unspool speed limited: torque=0.142 Nm, max_speed=5.3 rev/s (66%)\nVel-5.29/-0.84 | Tq-0.118 | Tn3.5N | L  1.65m | Joy:R-700* | P-43.6*(-6.8*/s) Y+155.1*(+47.5*/s) | K:P +0.0 R +0.0 X | Loop:3481us Mot:1733us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.52 | Tq-0.181 | Tn5.3N | L  1.66m | Joy:R-700* | P-43.3*(+15.2*/s) Y+155.4*(+42.8*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1846us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.64 | Tq+0.223 | Tn6.6N | L  1.67m | Joy:R-700* | P-44.1*(-41.0*/s) Y+155.5*(+36.8*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1764us
+Vel-5.60/-0.50 | Tq+0.091 | Tn2.7N | L  1.67m | Joy:R-700* | P-44.8*(-60.2*/s) Y+155.7*(+34.0*/s) | K:P +0.0 R +0.0 X | Loop:3491us Mot:1758us
+[SPEED] Unspool speed limited: torque=0.091 Nm, max_speed=2.9 rev/s (36%)\nVel-2.91/-1.67 | Tq-0.288 | Tn8.5N | L  1.67m | Joy:R-700* | P-42.5*(+154.2*/s) Y+155.9*(+30.3*/s) | K:P +0.0 R +0.0 X | Loop:3470us Mot:1735us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.25 | Tq-0.000 | Tn0.0N | L  1.68m | Joy:R-700* | P-43.2*(+40.2*/s) Y+155.9*(+24.7*/s) | K:P +0.0 R +0.0 X | Loop:3510us Mot:1771us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.67 | Tq+0.185 | Tn5.4N | L  1.69m | Joy:R-700* | P-44.2*(-31.6*/s) Y+156.0*(+21.6*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1737us
+[SPEED] Unspool speed limited: torque=0.185 Nm, max_speed=7.3 rev/s (91%)\nVel-5.60/+0.02 | Tq+0.057 | Tn1.7N | L  1.69m | Joy:R-700* | P-44.7*(-48.3*/s) Y+156.2*(+21.7*/s) | K:P +0.0 R +0.0 X | Loop:3472us Mot:1894us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[SPEED] Unspool speed limited: torque=0.057 Nm, max_speed=1.3 rev/s (16%)\nVel-1.31/-1.97 | Tq-0.274 | Tn8.0N | L  1.69m | Joy:R-700* | P-42.3*(+112.3*/s) Y+156.4*(+22.8*/s) | K:P +0.0 R +0.0 X | Loop:3595us Mot:1867us
+ESP-NOW RX: cmd=0 speed=-700 btn=0
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.00 | Tq+0.125 | Tn3.7N | L  1.70m | Joy:R-700* | P-42.8*(+19.2*/s) Y+156.7*(+24.7*/s) | K:P +0.0 R +0.0 X | Loop:3541us Mot:1708us
+[SPEED] Unspool speed limited: torque=0.125 Nm, max_speed=4.5 rev/s (56%)\nVel-4.49/-1.52 | Tq+0.128 | Tn3.8N | L  1.70m | Joy:R-700* | P-43.7*(-40.9*/s) Y+157.0*(+28.0*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1898us
+Vel-4.62/-1.40 | Tq-0.207 | Tn6.1N | L  1.70m | Joy:R-700* | P-43.9*(-26.9*/s) Y+157.3*(+30.4*/s) | K:P +0.0 R +0.0 X | Loop:3503us Mot:1404us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.15 | Tq-0.099 | Tn2.9N | L  1.71m | Joy:R-700* | P-44.3*(-38.4*/s) Y+157.6*(+30.4*/s) | K:P +0.0 R +0.0 X | Loop:3500us Mot:1706us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-3.53 | Tq+0.227 | Tn6.7N | L  1.72m | Joy:R-700* | P-45.2*(-74.5*/s) Y+157.8*(+31.4*/s) | K:P +0.0 R +0.0 X | Loop:3495us Mot:1763us
+REMOTE control: cmd=-700 vel=-5.60
+Vel-5.60/-0.46 | Tq+0.097 | Tn2.8N | L  1.72m | Joy:R-700* | P-45.8*(-71.5*/s) Y+158.1*(+33.0*/s) | K:P +0.0 R +0.0 X | Loop:3474us Mot:1770us
+[SPEED] Unspool speed limited: torque=0.097 Nm, max_speed=3.2 rev/s (39%)\nVel-3.17/-1.59 | Tq-0.278 | Tn8.2N | L  1.72m | Joy:R-700* | P-43.5*(+146.1*/s) Y+158.4*(+32.2*/s) | K:P +0.0 R +0.0 X | Loop:3494us Mot:1732us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-4.12 | Tq-0.003 | Tn0.1N | L  1.73m | Joy:R-700* | P-44.2*(+37.8*/s) Y+158.5*(+27.8*/s) | K:P +0.0 R +0.0 X | Loop:3498us Mot:1773us
+[WARNING] BLOCKED unspool: torque too low (0.000 Nm < 0.030 Nm)
+Vel+0.00/-2.75 | Tq+0.187 | Tn5.5N | L  1.73m | Joy:R-700* | P-45.1*(-25.0*/s) Y+158.6*(+25.3*/s) | K:P +0.0 R +0.0 X | Loop:3477us Mot:1769us
+[SPEED] Unspool speed limited: torque=0.187 Nm, max_speed=7.4 rev/s (92%)\nVel-5.60/+0.01 | Tq+0.059 | Tn1.7N | L  1.74m | Joy:R-700* | P-45.6*(-42.9*/s) Y+158.8*(+24.4*/s) | K:P +0.0 R +0.0 X | Loop:3493us Mot:1791us
+ESP-NOW RX: cmd=0 speed=-442 btn=0
+[SPEED] Unspool speed limited: torque=0.059 Nm, max_speed=1.4 rev/s (17%)\nVel-0.27/-1.68 | Tq-0.290 | Tn8.5N | L  1.74m | Joy:R -34* | P-43.1*(+165.3*/s) Y+158.9*(+22.2*/s) | K:P +0.0 R +0.0 X | Loop:3535us Mot:1760us
+ESP-NOW RX: cmd=0 speed=-34 btn=0
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/-3.29 | Tq+0.154 | Tn4.5N | L  1.74m | Joy:R  +0* | P-43.6*(+62.7*/s) Y+159.0*(+18.9*/s) | K:P +0.0 R +0.0 X | Loop:3693us Mot:1900us
+Vel+0.00/-0.88 | Tq+0.091 | Tn2.7N | L  1.75m | Joy:R  +0* | P-44.3*(-5.3*/s) Y+159.1*(+18.0*/s) | K:P +0.0 R +0.0 X | Loop:3522us Mot:1573us
+Vel+0.00/+0.49 | Tq+0.010 | Tn0.3N | L  1.75m | Joy:R  +0* | P-44.5*(-14.6*/s) Y+159.2*(+14.7*/s) | K:P +0.0 R +0.0 X | Loop:3497us Mot:1733us
+Vel+0.00/+0.68 | Tq-0.007 | Tn0.2N | L  1.74m | Joy:R  +0* | P-44.9*(-30.3*/s) Y+159.2*(+11.5*/s) | K:P +0.0 R +0.0 X | Loop:3493us Mot:1706us
+Vel+0.00/+0.40 | Tq-0.025 | Tn0.7N | L  1.74m | Joy:R  +0* | P-45.3*(-43.3*/s) Y+159.2*(+9.8*/s) | K:P +0.0 R +0.0 X | Loop:3493us Mot:1692us
+Vel+0.00/+0.06 | Tq-0.013 | Tn0.4N | L  1.74m | Joy:R  +0* | P-45.9*(-59.8*/s) Y+159.3*(+9.3*/s) | K:P +0.0 R +0.0 X | Loop:3475us Mot:1728us
+Vel+0.00/-0.07 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-46.5*(-66.1*/s) Y+159.3*(+9.3*/s) | K:P +0.0 R +0.0 X | Loop:3492us Mot:1729us
+Vel+0.00/-0.07 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-47.0*(-65.5*/s) Y+159.4*(+9.8*/s) | K:P +0.0 R +0.0 X | Loop:3481us Mot:1718us
+Vel+0.00/-0.03 | Tq-0.002 | Tn0.1N | L  1.74m | Joy:R  +0* | P-47.4*(-61.6*/s) Y+159.5*(+10.7*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1718us
+Vel+0.00/+0.02 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-47.9*(-60.0*/s) Y+159.6*(+11.3*/s) | K:P +0.0 R +0.0 X | Loop:3487us Mot:1739us
+Vel+0.00/+0.05 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-48.3*(-60.2*/s) Y+159.7*(+11.9*/s) | K:P +0.0 R +0.0 X | Loop:3490us Mot:1559us
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/+0.02 | Tq-0.005 | Tn0.2N | L  1.74m | Joy:R  +0* | P-48.8*(-60.2*/s) Y+159.8*(+11.8*/s) | K:P +0.0 R +0.0 X | Loop:3544us Mot:1622us
+Vel+0.00/-0.03 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-49.2*(-58.8*/s) Y+160.0*(+12.5*/s) | K:P +0.0 R +0.0 X | Loop:3490us Mot:1638us
+Vel+0.00/-0.03 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-49.6*(-55.0*/s) Y+160.1*(+14.1*/s) | K:P +0.0 R +0.0 X | Loop:3491us Mot:1863us
+Vel+0.00/-0.01 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-50.0*(-50.5*/s) Y+160.3*(+15.7*/s) | K:P +0.0 R +0.0 X | Loop:3475us Mot:1584us
+Vel+0.00/+0.02 | Tq-0.005 | Tn0.1N | L  1.74m | Joy:R  +0* | P-50.3*(-47.6*/s) Y+160.4*(+15.4*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1742us
+Vel+0.00/+0.02 | Tq-0.006 | Tn0.2N | L  1.74m | Joy:R  +0* | P-50.6*(-46.9*/s) Y+160.5*(+15.2*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1725us
+Vel+0.00/-0.01 | Tq-0.005 | Tn0.1N | L  1.74m | Joy:R  +0* | P-51.0*(-46.1*/s) Y+160.6*(+15.5*/s) | K:P +0.0 R +0.0 X | Loop:3474us Mot:1721us
+Vel+0.00/-0.02 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-51.3*(-44.6*/s) Y+160.8*(+15.8*/s) | K:P +0.0 R +0.0 X | Loop:3485us Mot:1738us
+REMOTE control: cmd=0 vel=0.00
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-51.6*(-43.2*/s) Y+160.9*(+15.5*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1704us
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-51.9*(-41.4*/s) Y+161.0*(+14.6*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1762us
+Vel+0.00/-0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-52.2*(-41.1*/s) Y+161.1*(+13.5*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1502us
+ESP-NOW RX: cmd=0 speed=0 btn=0
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-52.5*(-36.7*/s) Y+161.1*(+12.7*/s) | K:P +0.0 R +0.0 X | Loop:3670us Mot:1374us
+ESP-NOW RX: cmd=0 speed=0 btn=0
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-52.8*(-34.4*/s) Y+161.3*(+13.0*/s) | K:P +0.0 R +0.0 X | Loop:3562us Mot:1461us
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-53.1*(-35.2*/s) Y+161.4*(+13.6*/s) | K:P +0.0 R +0.0 X | Loop:3504us Mot:1570us
+Vel+0.00/-0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-53.3*(-35.1*/s) Y+161.5*(+13.7*/s) | K:P +0.0 R +0.0 X | Loop:3486us Mot:1331us
+Vel+0.00/-0.01 | Tq-0.005 | Tn0.1N | L  1.74m | Joy:R  +0* | P-53.6*(-35.2*/s) Y+161.6*(+13.9*/s) | K:P +0.0 R +0.0 X | Loop:3486us Mot:1741us
+Vel+0.00/+0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-53.8*(-34.3*/s) Y+161.7*(+14.1*/s) | K:P +0.0 R +0.0 X | Loop:3488us Mot:1712us
+Vel+0.00/+0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-54.1*(-33.9*/s) Y+161.9*(+14.2*/s) | K:P +0.0 R +0.0 X | Loop:3468us Mot:1731us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-54.3*(-32.4*/s) Y+162.0*(+14.2*/s) | K:P +0.0 R +0.0 X | Loop:3471us Mot:1715us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-54.6*(-30.9*/s) Y+162.1*(+13.9*/s) | K:P +0.0 R +0.0 X | Loop:3469us Mot:1745us
+Vel+0.00/-0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-54.8*(-30.2*/s) Y+162.1*(+12.8*/s) | K:P +0.0 R +0.0 X | Loop:3469us Mot:1717us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-55.0*(-28.6*/s) Y+162.2*(+11.2*/s) | K:P +0.0 R +0.0 X | Loop:3483us Mot:1730us
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/-0.01 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-55.2*(-27.2*/s) Y+162.3*(+10.4*/s) | K:P +0.0 R +0.0 X | Loop:3512us Mot:1639us
+ESP-NOW RX: cmd=0 speed=0 btn=0
+Vel+0.00/-0.02 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-55.4*(-26.3*/s) Y+162.3*(+10.4*/s) | K:P +0.0 R +0.0 X | Loop:3519us Mot:1586us
+Vel+0.00/-0.02 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-55.5*(-24.7*/s) Y+162.4*(+10.5*/s) | K:P +0.0 R +0.0 X | Loop:3587us Mot:2174us
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-55.7*(-22.8*/s) Y+162.5*(+10.5*/s) | K:P +0.0 R +0.0 X | Loop:3484us Mot:1720us
+Vel+0.00/+0.01 | Tq-0.005 | Tn0.2N | L  1.74m | Joy:R  +0* | P-55.9*(-21.4*/s) Y+162.6*(+10.3*/s) | K:P +0.0 R +0.0 X | Loop:3481us Mot:1718us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.0*(-19.8*/s) Y+162.7*(+9.8*/s) | K:P +0.0 R +0.0 X | Loop:3468us Mot:1718us
+Vel+0.00/-0.00 | Tq-0.003 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.1*(-18.5*/s) Y+162.7*(+9.0*/s) | K:P +0.0 R +0.0 X | Loop:3476us Mot:1753us
+Vel+0.00/-0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.3*(-17.9*/s) Y+162.7*(+7.9*/s) | K:P +0.0 R +0.0 X | Loop:3466us Mot:1718us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.4*(-16.1*/s) Y+162.8*(+6.6*/s) | K:P +0.0 R +0.0 X | Loop:3480us Mot:1729us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.5*(-14.5*/s) Y+162.8*(+6.1*/s) | K:P +0.0 R +0.0 X | Loop:3472us Mot:1738us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.6*(-13.3*/s) Y+162.8*(+6.9*/s) | K:P +0.0 R +0.0 X | Loop:3504us Mot:1728us
+REMOTE control: cmd=0 vel=0.00
+Vel+0.00/+0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.6*(-11.5*/s) Y+162.9*(+8.3*/s) | K:P +0.0 R +0.0 X | Loop:3470us Mot:1732us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.7*(-10.0*/s) Y+163.0*(+8.9*/s) | K:P +0.0 R +0.0 X | Loop:3477us Mot:1720us
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.7*(-8.9*/s) Y+163.1*(+8.1*/s) | K:P +0.0 R +0.0 X | Loop:3487us Mot:1663us
+Vel+0.00/+0.00 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.8*(-8.4*/s) Y+163.1*(+6.7*/s) | K:P +0.0 R +0.0 X | Loop:3486us Mot:1690us
+Vel+0.00/-0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.8*(-7.2*/s) Y+163.1*(+5.9*/s) | K:P +0.0 R +0.0 X | Loop:3496us Mot:1659us
+Vel+0.00/+0.01 | Tq-0.004 | Tn0.1N | L  1.74m | Joy:R  +0* | P-56.9*(-6.5*/s) Y+163.1*(+5.4*/s) | K:P +0.0 R +0.0 X | Loop:3473us Mot:1746us

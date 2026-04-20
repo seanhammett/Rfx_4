@@ -30,10 +30,6 @@ struct FlightSample {
     // Kite-mounted IMU (CodeCell BNO085, received via ESP-NOW)
     float kite_pitch_deg;
     float kite_roll_deg;
-    float kite_yaw_deg;
-    float kite_gyro_x;
-    float kite_gyro_y;
-    float kite_gyro_z;
     uint8_t kite_imu_battery;
 };
 

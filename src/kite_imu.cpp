@@ -18,7 +18,7 @@ const char* WIFI_PASS = "sonoma1991";
 static const uint8_t TARGET_KITE_MAC[6] = { 0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C }; //  3C:84:27:FC:C8:9C - bodgy board in purple tether
 
 // Transmission rate
-static const uint8_t IMU_RATE_HZ = 50;
+static const uint8_t IMU_RATE_HZ = 125;
 
 // =================== GLOBALS ===================
 CodeCell myCodeCell;
@@ -47,9 +47,9 @@ void setup() {
   delay(2000);
   Serial.println("\n\n=== Kite IMU — CodeCell C6 + BNO085 ===");
 
-  // Initialize CodeCell with game rotation (no mag) + gyro + accelerometer
-  myCodeCell.Init(MOTION_ROTATION_NO_MAG + MOTION_GYRO + MOTION_ACCELEROMETER);
-  Serial.println("[OK] CodeCell initialized (BNO085: rotation + gyro + accel)");
+  // Initialize CodeCell with game rotation only (no mag, no gyro, no accel)
+  myCodeCell.Init(MOTION_ROTATION_NO_MAG);
+  Serial.println("[OK] CodeCell initialized (BNO085: rotation only)");
 
   // Initialize WiFi (STA mode for channel sync with kite controller)
   Serial.println("\nInitializing WiFi...");
@@ -99,27 +99,15 @@ void setup() {
 // =================== MAIN LOOP ===================
 void loop() {
   if (myCodeCell.Run(IMU_RATE_HZ)) {
-    // Read sensor data
+    // Read rotation only (pitch & roll)
     float roll, pitch, yaw;
-    float gx, gy, gz;
-    float ax, ay, az;
-
     myCodeCell.Motion_RotationNoMagRead(roll, pitch, yaw);
-    myCodeCell.Motion_GyroRead(gx, gy, gz);
-    myCodeCell.Motion_AccelerometerRead(ax, ay, az);
 
-    // Build packet
+    // Build packet (pitch + roll only)
     KiteImuMsg msg = {};
     msg.msg_type = MSG_KITE_IMU;
-    msg.roll = roll;
     msg.pitch = pitch;
-    msg.yaw = yaw;
-    msg.gyro_x = gx;
-    msg.gyro_y = gy;
-    msg.gyro_z = gz;
-    msg.accel_x = ax;
-    msg.accel_y = ay;
-    msg.accel_z = az;
+    msg.roll = roll;
     msg.battery_pct = (uint8_t)myCodeCell.BatteryLevelRead();
     msg.sequence = packetSequence++;
 
@@ -144,8 +132,8 @@ void loop() {
     static unsigned long lastStatusPrint = 0;
     if (millis() - lastStatusPrint >= 5000) {
       lastStatusPrint = millis();
-      Serial.printf("[IMU] P%+6.1f R%+6.1f Y%+6.1f | G(%+6.1f,%+6.1f,%+6.1f) | A(%+5.2f,%+5.2f,%+5.2f) | Batt:%d | OK:%lu Fail:%lu\n",
-                    pitch, roll, yaw, gx, gy, gz, ax, ay, az,
+      Serial.printf("[IMU] P%+6.1f R%+6.1f | Batt:%d | OK:%lu Fail:%lu\n",
+                    pitch, roll,
                     (int)msg.battery_pct, successCount, failCount);
     }
   }
