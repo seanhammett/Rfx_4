@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
+#include <esp_pm.h>
 #include <CodeCell.h>
 #include "fleet_protocol.h"
 
@@ -43,17 +45,26 @@ void onDataReceived(const esp_now_recv_info_t *info, const uint8_t *data, int da
 
 // =================== SETUP ===================
 void setup() {
+  // Reduce CPU from 160 MHz default to 80 MHz — sufficient for IMU + ESP-NOW
+  setCpuFrequencyMhz(80);
+
   Serial.begin(115200);
   delay(2000);
   Serial.println("\n\n=== Kite IMU — CodeCell C6 + BNO085 ===");
+  Serial.printf("[OK] CPU frequency: %d MHz\n", getCpuFrequencyMhz());
 
   // Initialize CodeCell with game rotation only (no mag, no gyro, no accel)
   myCodeCell.Init(MOTION_ROTATION_NO_MAG);
   Serial.println("[OK] CodeCell initialized (BNO085: rotation only)");
 
-  // Initialize WiFi (STA mode for channel sync with kite controller)
-  Serial.println("\nInitializing WiFi...");
+  // Connect to WiFi briefly to sync channel, then disconnect.
+  // ESP-NOW requires the radio to be on the same channel as the peer;
+  // staying associated costs ~40-80 mA continuously — disconnect saves it.
+  uint8_t wifiChannel = 1;  // default; overwritten if WiFi connects
+  Serial.println("\nInitializing WiFi (channel sync only)...");
   WiFi.mode(WIFI_STA);
+  // Reduce TX power to 11 dBm — sufficient for <100 m kite range (default is 19.5 dBm)
+  esp_wifi_set_max_tx_power(44);  // units: 0.25 dBm steps → 44 × 0.25 = 11 dBm
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   unsigned long wifiStartTime = millis();
   while (WiFi.status() != WL_CONNECTED && (millis() - wifiStartTime < 10000)) {
@@ -62,10 +73,14 @@ void setup() {
   }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("[OK] WiFi connected | Channel: %d\n", WiFi.channel());
+    wifiChannel = (uint8_t)WiFi.channel();
+    Serial.printf("[OK] WiFi connected | Channel: %d — disconnecting (channel locked)\n", wifiChannel);
+    WiFi.disconnect(false);  // drop AP association; STA mode stays active for ESP-NOW
   } else {
-    Serial.println("[WARNING] WiFi connection timeout (ESP-NOW will use default channel)");
+    Serial.printf("[WARNING] WiFi timeout — using default channel %d\n", wifiChannel);
   }
+  // Lock radio to the negotiated channel so ESP-NOW peers can find us
+  esp_wifi_set_channel(wifiChannel, WIFI_SECOND_CHAN_NONE);
   Serial.printf("MAC Address: %s\n", WiFi.macAddress().c_str());
 
   // Initialize ESP-NOW
@@ -80,7 +95,7 @@ void setup() {
   // Register target kite controller as unicast peer
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, TARGET_KITE_MAC, 6);
-  peerInfo.channel = 0;
+  peerInfo.channel = wifiChannel;  // explicit channel — required after WiFi.disconnect()
   peerInfo.encrypt = false;
   if (esp_now_add_peer(&peerInfo) == ESP_OK) {
     peerRegistered = true;
@@ -91,9 +106,26 @@ void setup() {
     Serial.println("[ERROR] Failed to register peer");
   }
 
-  // LED: blue = initializing complete
-  myCodeCell.LED_SetBrightness(5);
+  // Brief blink to confirm setup complete, then LED off.
+  // The kite is airborne — visual feedback is useless and costs 5-15 mA.
+  myCodeCell.LED_SetBrightness(10);
+  delay(500);
+  myCodeCell.LED_SetBrightness(0);
   Serial.printf("\n[OK] Kite IMU ready — streaming at %d Hz\n", IMU_RATE_HZ);
+
+  // Enable dynamic frequency scaling (10-80 MHz) + auto light-sleep.
+  // The CPU scales down when idle between myCodeCell.Run() ticks.
+  // If ESP-NOW delivery degrades, set light_sleep_enable = false to keep
+  // DFS only (still significant saving without modem sleep risk).
+  esp_pm_config_t pm_config = {};
+  pm_config.max_freq_mhz = 80;
+  pm_config.min_freq_mhz = 10;
+  pm_config.light_sleep_enable = true;
+  if (esp_pm_configure(&pm_config) == ESP_OK) {
+    Serial.println("[OK] Power management: DFS 10-80 MHz + light sleep enabled");
+  } else {
+    Serial.println("[WARNING] Power management config failed — running at fixed 80 MHz");
+  }
 }
 
 // =================== MAIN LOOP ===================
@@ -102,6 +134,17 @@ void loop() {
     // Read rotation only (pitch & roll)
     float roll, pitch, yaw;
     myCodeCell.Motion_RotationNoMagRead(roll, pitch, yaw);
+
+    // Correct for inverted mounting: rest position reads ±180° instead of 0°.
+    // Shift by 180 and wrap to [-180, 180]. If tilting direction is also
+    // backwards after this correction, negate the affected axis as well.
+    auto wrapTo180 = [](float v) -> float {
+      if (v >  180.0f) v -= 360.0f;
+      if (v < -180.0f) v += 360.0f;
+      return v;
+    };
+    pitch = wrapTo180(180.0f - pitch);
+    roll  = wrapTo180(180.0f - roll);
 
     // Build packet (pitch + roll only)
     KiteImuMsg msg = {};
@@ -123,11 +166,6 @@ void loop() {
       }
     }
 
-    // LED status: green = streaming OK, red = send failures
-    if (lastSendOk && peerRegistered) {
-      myCodeCell.LED_SetBrightness(3);  // dim green via Run() default
-    }
-
     // Periodic serial status (every 5 seconds)
     static unsigned long lastStatusPrint = 0;
     if (millis() - lastStatusPrint >= 5000) {
@@ -136,5 +174,7 @@ void loop() {
                     pitch, roll,
                     (int)msg.battery_pct, successCount, failCount);
     }
+  } else {
+    delay(1);  // yield to FreeRTOS scheduler; pairs with light sleep for idle-time savings
   }
 }

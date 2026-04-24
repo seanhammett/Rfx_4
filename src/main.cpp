@@ -96,6 +96,10 @@ struct KiteImuData {
 volatile KiteImuData kiteImu = {};
 static const unsigned long KITE_IMU_STALE_MS = 200;  // Mark invalid after 200ms with no packets
 
+// ===== ESP-NOW Diagnostic Counters =====
+volatile uint32_t espNowRxTotal = 0;    // All packets reaching onDataReceived
+volatile uint32_t espNowRxKiteImu = 0; // Packets matched as MSG_KITE_IMU
+
 // ===== Timing & Control Constants =====
 const unsigned long MOTION_INTERVAL = 8;        // Update every 8ms (125Hz)
 const unsigned long REMOTE_TIMEOUT_MS = 300;      // Remote considered active for 300ms after last command
@@ -321,6 +325,7 @@ void processJoystickInput(int raw_command, const char* source_label) {
 void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   // ISR context — keep FAST! Copy data and set flags only.
   if (data_len == 0) return;
+  espNowRxTotal++;
 
   // Legacy 4-byte ControlMessage (backward compat with old remotes)
   if (data_len == sizeof(LegacyControlMsg)) {
@@ -370,6 +375,7 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
       break;
 
     case MSG_KITE_IMU:
+      espNowRxKiteImu++;
       if (data_len >= sizeof(KiteImuMsg)) {
         const KiteImuMsg* msg = (const KiteImuMsg*)data;
         kiteImu.pitch = msg->pitch;
@@ -1131,10 +1137,11 @@ void printStatus() {
   }
   
   pos += snprintf(status_line + pos, sizeof(status_line) - pos,
-          " | P%+5.1f*(%+4.1f*/s) Y%+5.1f*(%+4.1f*/s) | K:P%+5.1f R%+5.1f%s",
+          " | P%+5.1f*(%+4.1f*/s) Y%+5.1f*(%+4.1f*/s) | K:P%+5.1f R%+5.1f%s | RX:%lu/%lu",
           imu.pitch, imu.pitch_velocity, imu.yaw, imu.yaw_velocity,
           kiteImu.pitch, kiteImu.roll,
-          (kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS)) ? "" : " X");
+          (kiteImu.valid && (millis() - kiteImu.lastReceived_ms < KITE_IMU_STALE_MS)) ? "" : " X",
+          (unsigned long)espNowRxKiteImu, (unsigned long)espNowRxTotal);
 
   snprintf(status_line + pos, sizeof(status_line) - pos,
           " | Loop:%luus Mot:%luus",
