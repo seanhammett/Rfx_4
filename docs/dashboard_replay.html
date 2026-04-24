@@ -963,7 +963,7 @@
 
     // 3D view placeholder (Three.js)
     // 3D view with kite animation
-    let scene, camera, renderer, kiteLine, kiteDot, groundDot;
+    let scene, camera, renderer, kiteLine, kiteDot, groundDot, kiteOrientArrow;
     function initThreeJS() {
         const container = document.getElementById('threeContainer');
         scene = new THREE.Scene();
@@ -994,6 +994,10 @@
         scene.add(kiteDot);
         groundDot = new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12), new THREE.MeshBasicMaterial({color:0x00ffff}));
         scene.add(groundDot);
+        // Kite IMU orientation arrow (hidden until kite IMU data is present)
+        kiteOrientArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 0.1, 0xffb85c, 0.04, 0.02);
+        kiteOrientArrow.visible = false;
+        scene.add(kiteOrientArrow);
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
     }
@@ -1017,6 +1021,28 @@
         pos.needsUpdate = true;
         kiteDot.position.set(x, y, z);
         groundDot.position.set(x, 0, z);
+        // Kite IMU orientation arrow
+        if (kiteOrientArrow) {
+            const kp = row['Kite_Pitch_deg'];
+            const kr = row['Kite_Roll_deg'];
+            if (kp !== undefined) {
+                const kpRad = Number(kp) * Math.PI / 180;
+                const krRad = Number(kr || 0) * Math.PI / 180;
+                // Kite local axes in world space (based on reel yaw)
+                const leftDir = new THREE.Vector3(Math.cos(yr), 0, -Math.sin(yr));
+                const fwdDir  = new THREE.Vector3(Math.sin(yr), 0,  Math.cos(yr));
+                // Start with world up, apply pitch then roll
+                const arrDir = new THREE.Vector3(0, 1, 0);
+                arrDir.applyAxisAngle(leftDir, kpRad);
+                arrDir.applyAxisAngle(fwdDir, krRad);
+                arrDir.normalize();
+                kiteOrientArrow.setDirection(arrDir);
+                kiteOrientArrow.position.set(x, y, z);
+                kiteOrientArrow.visible = true;
+            } else {
+                kiteOrientArrow.visible = false;
+            }
+        }
     }
 
     window.onload = function() {
