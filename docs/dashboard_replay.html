@@ -123,6 +123,14 @@
                     }
                 </style>
             <span id="playbackStatus" style="color:#5ab5ff;margin-left:10px;"></span>
+            <select id="playbackSpeed" title="Playback speed" style="background:#333;color:#5ab5ff;border:1px solid #666;border-radius:4px;padding:2px 6px;font-size:13px;cursor:pointer;">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+                <option value="8">8x</option>
+            </select>
             <span id="paramsStatus" title="Detector parameters source" style="margin-left:auto;padding:3px 10px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;background:#333;color:#888;border:1px solid #555;">params: checking&hellip;</span>
         </div>
         <div style="display: flex; gap: 20px;">
@@ -133,24 +141,14 @@
                     <div class="value" id="joystickInput" style="text-align: right;">0</div>
                 </div>
                 <div class="card">
-                    <h3>Pitch</h3>
-                    <div class="value" id="pitch" style="text-align: right;">0.0&deg;</div>
-                </div>
-                <div class="card">
-                    <h3>Yaw</h3>
-                    <div class="value" id="yaw" style="text-align: right;">0.0&deg;</div>
-                </div>
-                <div class="card">
-                    <h3>Line Length</h3>
-                    <div class="value" id="lineLength" style="text-align: right;">0.00 m</div>
-                </div>
-                <div class="card">
-                    <h3>Line Speed</h3>
-                    <div class="value" id="lineSpeedReq" style="text-align: right;">0.00 m/s</div>
-                </div>
-                <div class="card">
-                    <h3>Line Tension</h3>
-                    <div class="value" id="lineTension" style="text-align: right;">0.0 N</div>
+                    <h3>Flight Data</h3>
+                    <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                        <div><span style="color:#fff;">Pitch:</span> <span id="pitch" style="color:#5ab5ff; font-family:'Courier New',monospace;">0.0&deg;</span></div>
+                        <div><span style="color:#fff;">Yaw:</span> <span id="yaw" style="color:#5ab5ff; font-family:'Courier New',monospace;">0.0&deg;</span></div>
+                        <div><span style="color:#fff;">Length:</span> <span id="lineLength" style="color:#5ab5ff; font-family:'Courier New',monospace;">0.00 m</span></div>
+                        <div><span style="color:#fff;">Speed:</span> <span id="lineSpeedReq" style="color:#5ab5ff; font-family:'Courier New',monospace;">0.00 m/s</span></div>
+                        <div><span style="color:#fff;">Tension:</span> <span id="lineTension" style="color:#5ab5ff; font-family:'Courier New',monospace;">0.0 N</span></div>
+                    </div>
                 </div>
                 <div class="card">
                     <h3>Detectors</h3>
@@ -292,6 +290,33 @@
     function resetWindBuffer() {
         windYawBuffer = [];
         windYawBufferIndex = 0;
+    }
+
+    // Pre-compute detector values and wind direction for every row at file-load time.
+    // Stores _diveConf, _awwConf, _afConf, _windDir, _windSamples on each row object so the
+    // animation loop only needs to read pre-computed values instead of running state machines.
+    function precomputeAllRows(rows) {
+        resetDiveDetector();
+        resetAwwDetector();
+        resetActiveFlightDetector();
+        resetWindBuffer();
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            updateDiveDetector(row);
+            updateAwwDetector(row);
+            updateActiveFlightDetector(row);
+            addWindYawSample(row['Yaw_deg']);
+            row._diveConf   = diveConfidence;
+            row._awwConf    = awwConfidence;
+            row._afConf     = afConfidence;
+            row._windDir    = getWindDirection();
+            row._windSamples = Math.min(windYawBuffer.length, WIND_DIRECTION_SAMPLES);
+        }
+        // Leave module state clean — playback reads pre-computed values, not live state
+        resetDiveDetector();
+        resetAwwDetector();
+        resetActiveFlightDetector();
+        resetWindBuffer();
     }
 
     // Detector parameters — loaded from firmware /status endpoint.
@@ -667,11 +692,11 @@
         setText('apDecel', '—');
         setText('apDeadband', '—');
         setText('apSlackRange', '—');
-        // Wind direction (rolling average)
-        addWindYawSample(row['Yaw_deg']);
-        const windDir = getWindDirection();
+        // Wind direction (pre-computed rolling average)
+        const windDir     = row._windDir     !== undefined ? row._windDir     : getWindDirection();
+        const windSamples = row._windSamples  !== undefined ? row._windSamples : windYawBuffer.length;
         setText('windDirection', formatValue(windDir, 6, 1, false) + '\u00b0');
-        setText('windDirectionSamples', Math.min(windYawBuffer.length, WIND_DIRECTION_SAMPLES) + ' samples');
+        setText('windDirectionSamples', windSamples + ' samples');
         // Playback date/time
         setText('playbackDate', row['Date'] || '—');
         setText('playbackTime', row['Time'] || '—');
@@ -692,9 +717,12 @@
 
     // Dashboard + all detectors + UI render (used by non-playback callers)
     function updateDashboardFull(row) {
-        updateDiveDetector(row);
-        updateAwwDetector(row);
-        updateActiveFlightDetector(row);
+        // Use pre-computed detector values if available (set after precomputeAllRows)
+        if (row._diveConf !== undefined) {
+            diveConfidence = row._diveConf;
+            awwConfidence  = row._awwConf;
+            afConfidence   = row._afConf;
+        }
         updateDashboard(row);
         renderDiveDetectorUI();
         renderAwwDetectorUI();
@@ -722,8 +750,8 @@
         cD1.push(row['Pitch_deg']);
         const l = row['Line_Length_m'];
         cD2.push(l);
-        cD3.push(Math.round(diveConfidence * 100));
-        cD4.push(Math.round(afConfidence * 100));
+        cD3.push(Math.round((row._diveConf || 0) * 100));
+        cD4.push(Math.round((row._afConf  || 0) * 100));
         if (l > chartMaxLineLength) chartMaxLineLength = l;
     }
 
@@ -775,6 +803,7 @@
         isPlaying = true;
         totalSkipped = 0;
         maxBatch = 0;
+        let playFrameCount = 0;
         document.getElementById('togglePlayBtn').disabled = false;
         document.getElementById('playhead').disabled = true;
         setPlayPauseIcon();
@@ -794,13 +823,15 @@
                     ? '  |  skipped ' + totalSkipped + ' frames (max batch ' + maxBatch + ')'
                     : '';
                 document.getElementById('playbackStatus').textContent = 'Done (' + playbackIndex + '/' + csvRows.length + ')' + skipInfo;
+                flushChart();
                 return;
             }
 
             // How much wall-clock time has elapsed since play started
             const wallElapsed = now - playbackStartWall;
-            // Corresponding data timestamp we should be at
-            const targetDataTs = playbackStartData + wallElapsed;
+            // Corresponding data timestamp we should be at (scaled by playback speed)
+            const playSpeed = parseFloat(document.getElementById('playbackSpeed').value) || 1.0;
+            const targetDataTs = playbackStartData + wallElapsed * playSpeed;
 
             // Count how many rows fall within this frame
             let batchStart = playbackIndex;
@@ -812,21 +843,23 @@
             let batchSize = playbackIndex - batchStart;
 
             if (batchSize > 0) {
-                // Push data for all rows in the batch (fast, no rendering)
+                // Push chart data for all rows in batch — detectors are pre-computed, no state machines
                 for (let i = batchStart; i < playbackIndex; i++) {
-                    updateDiveDetector(csvRows[i]);
-                    updateAwwDetector(csvRows[i]);
-                    updateActiveFlightDetector(csvRows[i]);
                     appendChartData(csvRows[i]);
                 }
                 trimChartData();
-                // Render dashboard + chart + detector UI only once for the last row
+                // Render dashboard + detector UI once for the last row
                 const lastRow = csvRows[playbackIndex - 1];
+                diveConfidence = lastRow._diveConf || 0;
+                awwConfidence  = lastRow._awwConf  || 0;
+                afConfidence   = lastRow._afConf   || 0;
                 updateDashboard(lastRow);
                 renderDiveDetectorUI();
                 renderAwwDetectorUI();
                 renderActiveFlightDetectorUI();
-                flushChart();
+                // Throttle chart renders to ~20 fps (every 3 animation frames)
+                playFrameCount++;
+                if (playFrameCount % 3 === 0) flushChart();
 
                 let skippedThisFrame = Math.max(0, batchSize - 1);
                 totalSkipped += skippedThisFrame;
@@ -877,49 +910,35 @@
         resetWindBuffer();
     }
 
-    // Playhead (scrubbing) logic
+    // Playhead (scrubbing) logic — O(chartMaxPoints) since detectors are pre-computed
     document.getElementById('playhead').addEventListener('input', function(e) {
         if (!csvRows.length) return;
         pause();
         playbackIndex = Number(e.target.value);
-        // Recalculate dive detector from beginning in one pass,
-        // and collect chart data for the last chartMaxPoints rows
-        resetDiveDetector();
-        resetAwwDetector();
-        resetActiveFlightDetector();
-        resetWindBuffer();
         chart.data.labels = [];
         chart.data.datasets.forEach(ds => ds.data = []);
         cacheChartArrays();
         chartMaxLineLength = 0;
         const chartStart = Math.max(0, playbackIndex - chartMaxPoints + 1);
-        // Advance detector state up to chartStart (no chart data needed)
-        for (let i = 0; i < chartStart && i < csvRows.length; i++) {
-            updateDiveDetector(csvRows[i]);
-            updateAwwDetector(csvRows[i]);
-            updateActiveFlightDetector(csvRows[i]);
-            addWindYawSample(csvRows[i]['Yaw_deg']);
-        }
-        // From chartStart onward: update detector AND push chart data
         for (let i = chartStart; i <= playbackIndex && i < csvRows.length; i++) {
-            updateDiveDetector(csvRows[i]);
-            updateAwwDetector(csvRows[i]);
-            updateActiveFlightDetector(csvRows[i]);
-            addWindYawSample(csvRows[i]['Yaw_deg']);
             const row = csvRows[i];
             cLabels.push('');
             cD0.push(row['Tension_N']);
             cD1.push(row['Pitch_deg']);
             const l = row['Line_Length_m'];
             cD2.push(l);
-            cD3.push(Math.round(diveConfidence * 100));
-            cD4.push(Math.round(afConfidence * 100));
+            cD3.push(Math.round((row._diveConf || 0) * 100));
+            cD4.push(Math.round((row._afConf  || 0) * 100));
             if (l > chartMaxLineLength) chartMaxLineLength = l;
         }
         const padding = Math.max(chartMaxLineLength * 0.15, 0.5);
         chart.options.scales.y2.max = Math.ceil((chartMaxLineLength + padding) * 2) / 2;
         chart.update('none');
-        updateDashboard(csvRows[playbackIndex]);
+        const row = csvRows[playbackIndex];
+        diveConfidence = row._diveConf || 0;
+        awwConfidence  = row._awwConf  || 0;
+        afConfidence   = row._afConf   || 0;
+        updateDashboard(row);
         renderDiveDetectorUI();
         renderAwwDetectorUI();
         renderActiveFlightDetectorUI();
@@ -932,6 +951,7 @@
         const reader = new FileReader();
         reader.onload = function(evt) {
             csvRows = parseCSV(evt.target.result);
+            precomputeAllRows(csvRows);
             resetPlayback();
             const playhead = document.getElementById('playhead');
             const togglePlayBtn = document.getElementById('togglePlayBtn');
