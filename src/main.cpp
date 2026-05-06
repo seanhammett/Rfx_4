@@ -113,8 +113,8 @@ unsigned long loopInterval_us = 0;  // measured loop-to-loop interval
 unsigned long motionBlockUs = 0;    // time spent inside the motion control block
 const float MAX_VELOCITY_RPS = 8.0;  // Maximum velocity: 8.0 revolutions per second
 const float MAX_TORQUE = 2.0;  // Max torque in Nm (adjust as needed)
-const float MIN_TENSION_TORQUE = 0.016;  // Minimum torque (Nm) required to allow line extension
-const float FULL_TENSION_TORQUE = 0.2; // Torque (Nm) above which full unspool speed is allowed
+const float MIN_TENSION_TORQUE  = 0.014;  // Minimum torque (Nm) required to allow line extension
+const float FULL_TENSION_TORQUE = 0.080; // Torque (Nm) above which full unspool speed is allowed
 const float MIN_UNSPOOL_SPEED = 0.05;     // Minimum unspool speed (rev/s) at MIN_TENSION_TORQUE threshold
 const float UNSPOOL_ACCEL_RPS2 = 8.0;    // Max unspool ramp-up rate (rev/s per second)
 
@@ -909,7 +909,7 @@ void processRemoteCommands() {
     uint8_t clicks = min((uint8_t)3, remote_click_count);
     remote_click_count = 0;
 
-    if (clicks == 1) {
+    if (clicks == 1 || clicks == 2) {
       toggleTargetSeeking("REMOTE");
     } else if (clicks == 3) {
       respool_mode = !respool_mode;

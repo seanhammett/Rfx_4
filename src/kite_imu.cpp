@@ -17,8 +17,9 @@ const char* WIFI_PASS = "sonoma1991";
 // Target kite controller MAC address (unicast)
 // Set this to the MAC of the kite controller this CodeCell is paired with.
 // Find it from the kite controller's serial output on boot.
-static const uint8_t TARGET_KITE_MAC[6] = { 0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C }; // purple tether
+static const uint8_t TARGET_KITE_MAC[6] = { 0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C };  // purple tether 3C:84:27:FC:C8:9C
 // static const uint8_t TARGET_KITE_MAC[6] = { 0xE4, 0xB0, 0x63, 0xAE, 0x7B, 0x28 };  // blue tether E4:B0:63:AE:7B:28
+// static const uint8_t TARGET_KITE_MAC[6] = { 0xE4, 0xB0, 0x63, 0xAE, 0xBA, 0xF8 };  // red tether E4:B0:63:AE:BA:F8
 
 // Transmission rate
 static const uint8_t IMU_RATE_HZ = 125;
