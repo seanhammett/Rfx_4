@@ -18,11 +18,27 @@ struct JoystickConfig {
 };
 
 static const JoystickConfig JS_CONFIG[MAX_KITES] = {
-  {  6,  7, 39,  2068, 2156, 2051, 2144 },  // Joystick 1 → Kite 1
-  {  4,  5, 40,  2037, 2136, 2066, 2157 },  // Joystick 2 → Kite 2
-  { 12, 10, 41,  2087, 2176, 2044, 2119 },  // Joystick 3 → Kite 3
-  { 13, 11, 42,  2087, 2166, 2036, 2115 },  // Joystick 4 → Kite 4
+  {  6,  7, 39,  2068, 2156, 2051, 2144 },  // Joystick 1
+  {  4,  5, 40,  2037, 2136, 2066, 2157 },  // Joystick 2
+  { 12, 10, 41,  2087, 2176, 2044, 2119 },  // Joystick 3
+  { 13, 11, 42,  2087, 2166, 2036, 2115 },  // Joystick 4
 };
+
+// =================== KNOWN KITES ===================
+// Fixed MAC → joystick slot mapping. Slot 0 = first entry, slot 1 = second, etc.
+// Add or reorder entries here to change which kite each joystick controls.
+struct KnownKite {
+  uint8_t mac[6];
+  const char* name;
+  uint8_t r, g, b;   // full-brightness LED color for this kite
+};
+
+static const KnownKite KNOWN_KITES[] = {
+  { {0x3C, 0x84, 0x27, 0xFC, 0xC8, 0x9C}, "purple", 160,   0, 200 },  // Joystick 1
+  { {0xE4, 0xB0, 0x63, 0xAE, 0x7B, 0x28}, "blue",     0,   0, 255 },  // Joystick 2
+  { {0xE4, 0xB0, 0x63, 0xAE, 0xBA, 0xF8}, "red",    255,   0,   0 },  // Joystick 3
+};
+static const int NUM_KNOWN_KITES = sizeof(KNOWN_KITES) / sizeof(KNOWN_KITES[0]);
 
 // =================== CONFIG ===================
 const char* WIFI_SSID = "iPhone 123";
@@ -39,7 +55,7 @@ struct JoystickSlot {
   bool prevButton;
 };
 
-JoystickSlot slots[MAX_KITES];   // index 0 = joystick 1 → kite_id 1, etc.
+JoystickSlot slots[MAX_KITES];   // index 0 = joystick 1 → KNOWN_KITES[0], etc.
 
 // =================== FLEET STATE ====================
 bool fleetDiscovered = false;
@@ -61,7 +77,7 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // Receive callback — handles fleet roster responses from host
-void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+void onDataReceived(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
   if (data_len == 0) return;
   uint8_t msg_type = data[0];
   if (msg_type == MSG_FLEET_ROSTER && data_len >= sizeof(FleetRosterMsg) && !rosterReceived) {
@@ -129,13 +145,12 @@ int doFleetDiscovery(int attempts, unsigned long timeout_ms) {
   }
   Serial.println();
 
-  // Assign each unassigned slot to its matching kite_id
+  // Assign each unassigned slot to its known kite by MAC address
   int newlyAssigned = 0;
-  for (int j = 0; j < MAX_KITES; j++) {
+  for (int j = 0; j < NUM_KNOWN_KITES; j++) {
     if (slots[j].assigned) continue;
-    uint8_t target_id = j + 1;
     for (uint8_t k = 0; k < knownFleetSize; k++) {
-      if (knownKites[k].kite_id == target_id) {
+      if (memcmp(knownKites[k].mac, KNOWN_KITES[j].mac, 6) == 0) {
         memcpy(slots[j].targetMAC, knownKites[k].mac, 6);
         slots[j].assigned = true;
         newlyAssigned++;
@@ -146,8 +161,8 @@ int doFleetDiscovery(int attempts, unsigned long timeout_ms) {
           p.encrypt = false;
           esp_now_add_peer(&p);
         }
-        Serial.printf("[FLEET] Joystick %d \u2192 Kite %d  %02X:%02X:%02X:%02X:%02X:%02X\n",
-                      j + 1, target_id,
+        Serial.printf("[FLEET] Joystick %d \u2192 %s  %02X:%02X:%02X:%02X:%02X:%02X\n",
+                      j + 1, KNOWN_KITES[j].name,
                       slots[j].targetMAC[0], slots[j].targetMAC[1],
                       slots[j].targetMAC[2], slots[j].targetMAC[3],
                       slots[j].targetMAC[4], slots[j].targetMAC[5]);
@@ -164,7 +179,7 @@ void setup() {
   delay(2000);
   
   Serial.println("\n=== Remote Control Startup (Multi-Kite) ===");
-  neopixelWrite(2, 0, 0, 0);
+  rgbLedWrite(2, 0, 0, 0);
   
   // Initialize all 4 joysticks
   for (int i = 0; i < MAX_KITES; i++) {
@@ -226,12 +241,12 @@ void setup() {
 
   // ===== Fleet Discovery =====
   Serial.println("\n[FLEET] Starting fleet discovery...");
-  neopixelWrite(2, 0, 0, 50);  // Blue = discovering
+  rgbLedWrite(2, 0, 0, 50);  // Blue = discovering
   int assignedCount = doFleetDiscovery(DISCOVER_RETRIES + 1, DISCOVER_TIMEOUT_MS);
   if (assignedCount > 0) {
-    neopixelWrite(2, 0, 50, 0);   // Green = at least 1 kite found
+    rgbLedWrite(2, 0, 50, 0);   // Green = at least 1 kite found
   } else {
-    neopixelWrite(2, 50, 20, 0);  // Orange = no kites found
+    rgbLedWrite(2, 50, 20, 0);  // Orange = no kites found
   }
   Serial.println("[OK] Remote control ready!");
 }
@@ -272,7 +287,7 @@ void loop() {
     if (shouldSend && (now - s.lastCommandSent >= COMMAND_INTERVAL)) {
       s.lastCommandSent = now;
       sendMotorCommand(s.targetMAC, cmd, current_switch);
-      Serial.printf("J%d→K%d TX:%+5d btn:%d\n", i + 1, i + 1, cmd, current_switch);
+      Serial.printf("J%d→%-6s TX:%+5d btn:%d\n", i + 1, i < NUM_KNOWN_KITES ? KNOWN_KITES[i].name : "?", cmd, current_switch);
     }
   }
 
@@ -285,10 +300,10 @@ void loop() {
   }
   if (dominantCmd > 0) {
     int brightness = map(dominantCmd, 0, 1000, 10, 255);
-    neopixelWrite(2, brightness, brightness, brightness);  // White = extending
+    rgbLedWrite(2, brightness, brightness, brightness);  // White = extending
   } else if (dominantCmd < 0) {
     int brightness = map(-dominantCmd, 0, 1000, 10, 255);
-    neopixelWrite(2, brightness, 0, 0);                    // Red = retracting
+    rgbLedWrite(2, brightness, 0, 0);                    // Red = retracting
   } else {
     // Idle — heartbeat: N dim blue blips every ~2s (N = assigned kites)
     static int  hbBlip = 0;         // 0 = initial pause, 1..N = current blip
@@ -298,16 +313,28 @@ void loop() {
     for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) connectedKites++;
 
     if (connectedKites == 0) {
-      neopixelWrite(2, 0, 0, 0);                           // No fleet — stay off
+      rgbLedWrite(2, 0, 0, 0);                           // No fleet — stay off
       hbBlip = 0; hbTime = now;
     } else if (hbBlip == 0) {
-      neopixelWrite(2, 0, 0, 0);                           // Pre-sequence pause
+      rgbLedWrite(2, 0, 0, 0);                           // Pre-sequence pause
       if (now - hbTime >= 2000) { hbBlip = 1; hbOn = true; hbTime = now; }
     } else if (hbOn) {
-      neopixelWrite(2, 0, 0, 10);                          // Dim blue blip on
+      // Color = dim version of the hbBlip-th connected kite's color
+      uint8_t hr = 8, hg = 8, hb = 8;  // default: dim white
+      int cnt = 0;
+      for (int i = 0; i < NUM_KNOWN_KITES; i++) {
+        if (slots[i].assigned && ++cnt == hbBlip) {
+          hr = KNOWN_KITES[i].r / 20;
+          hg = KNOWN_KITES[i].g / 20;
+          hb = KNOWN_KITES[i].b / 20;
+          if (hr == 0 && hg == 0 && hb == 0) { hr = hg = hb = 8; }  // fallback white
+          break;
+        }
+      }
+      rgbLedWrite(2, hr, hg, hb);
       if (now - hbTime >= 80) { hbOn = false; hbTime = now; }
     } else {
-      neopixelWrite(2, 0, 0, 0);
+      rgbLedWrite(2, 0, 0, 0);
       if (hbBlip < connectedKites) {
         if (now - hbTime >= 150) { hbBlip++; hbOn = true; hbTime = now; }  // Next blip
       } else {
@@ -327,15 +354,11 @@ void loop() {
       int found = doFleetDiscovery(1, 800);  // Quick single attempt
       // Print connection status
       int conn = 0;
-      for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) conn++;
-      Serial.printf("[STATUS] %d/%d kite(s) connected", conn, MAX_KITES);
-      for (int i = 0; i < MAX_KITES; i++) {
+      for (int i = 0; i < NUM_KNOWN_KITES; i++) if (slots[i].assigned) conn++;
+      Serial.printf("[STATUS] %d/%d kite(s) connected", conn, NUM_KNOWN_KITES);
+      for (int i = 0; i < NUM_KNOWN_KITES; i++) {
         if (slots[i].assigned) {
-          Serial.printf("  J%d→K%d(%02X:%02X:%02X:%02X:%02X:%02X)",
-                        i + 1, i + 1,
-                        slots[i].targetMAC[0], slots[i].targetMAC[1],
-                        slots[i].targetMAC[2], slots[i].targetMAC[3],
-                        slots[i].targetMAC[4], slots[i].targetMAC[5]);
+          Serial.printf("  J%d→%s", i + 1, KNOWN_KITES[i].name);
         } else {
           Serial.printf("  J%d→(none)", i + 1);
         }
