@@ -49,6 +49,7 @@ struct JoystickSlot {
   JoystickController* controller;
   uint8_t targetMAC[6];       // kite this joystick sends to
   bool assigned;               // true if a kite was matched for this joystick
+  int knownKiteIdx;            // index into KNOWN_KITES (-1 if unassigned)
   unsigned long lastCommandSent;
   unsigned long lastActiveTime;
   unsigned long lastButtonChangeTime;
@@ -145,30 +146,76 @@ int doFleetDiscovery(int attempts, unsigned long timeout_ms) {
   }
   Serial.println();
 
-  // Assign each unassigned slot to its known kite by MAC address
-  int newlyAssigned = 0;
-  for (int j = 0; j < NUM_KNOWN_KITES; j++) {
-    if (slots[j].assigned) continue;
-    for (uint8_t k = 0; k < knownFleetSize; k++) {
-      if (memcmp(knownKites[k].mac, KNOWN_KITES[j].mac, 6) == 0) {
-        memcpy(slots[j].targetMAC, knownKites[k].mac, 6);
-        slots[j].assigned = true;
-        newlyAssigned++;
-        if (!esp_now_is_peer_exist(slots[j].targetMAC)) {
-          esp_now_peer_info_t p = {};
-          memcpy(p.peer_addr, slots[j].targetMAC, 6);
-          p.channel = 0;
-          p.encrypt = false;
-          esp_now_add_peer(&p);
-        }
-        Serial.printf("[FLEET] Joystick %d \u2192 %s  %02X:%02X:%02X:%02X:%02X:%02X\n",
-                      j + 1, KNOWN_KITES[j].name,
-                      slots[j].targetMAC[0], slots[j].targetMAC[1],
-                      slots[j].targetMAC[2], slots[j].targetMAC[3],
-                      slots[j].targetMAC[4], slots[j].targetMAC[5]);
-        break;
+  // Assign kites to joystick slots in connection order:
+  //   1. Host kite (kite_id == 1) always goes first.
+  //   2. Remaining unassigned kites are added in KNOWN_KITES table order.
+  // Each newly-seen kite takes the next available (lowest-index) slot.
+
+  // Build a pending list of roster kites not yet assigned to any slot.
+  struct PendingAssignment { int knownIdx; uint8_t mac[6]; bool isHost; };
+  PendingAssignment pending[MAX_KITES];
+  int pendingCount = 0;
+
+  for (uint8_t k = 0; k < knownFleetSize; k++) {
+    // Find this roster kite in KNOWN_KITES by MAC
+    int ki = -1;
+    for (int j = 0; j < NUM_KNOWN_KITES; j++) {
+      if (memcmp(knownKites[k].mac, KNOWN_KITES[j].mac, 6) == 0) { ki = j; break; }
+    }
+    if (ki < 0) continue;  // unknown kite — skip
+
+    // Skip if already assigned to any slot
+    bool alreadyAssigned = false;
+    for (int s = 0; s < MAX_KITES; s++) {
+      if (slots[s].assigned && slots[s].knownKiteIdx == ki) { alreadyAssigned = true; break; }
+    }
+    if (alreadyAssigned) continue;
+
+    pending[pendingCount].knownIdx = ki;
+    memcpy(pending[pendingCount].mac, knownKites[k].mac, 6);
+    pending[pendingCount].isHost = (knownKites[k].kite_id == 1);
+    pendingCount++;
+  }
+
+  // Sort: host first (-1 priority), then ascending KNOWN_KITES index
+  for (int i = 0; i < pendingCount - 1; i++) {
+    for (int j = i + 1; j < pendingCount; j++) {
+      int pi = pending[i].isHost ? -1 : pending[i].knownIdx;
+      int pj = pending[j].isHost ? -1 : pending[j].knownIdx;
+      if (pj < pi) {
+        PendingAssignment tmp = pending[i]; pending[i] = pending[j]; pending[j] = tmp;
       }
     }
+  }
+
+  // Assign each pending kite to the next available (lowest-index) slot
+  int newlyAssigned = 0;
+  for (int p = 0; p < pendingCount; p++) {
+    int slot = -1;
+    for (int s = 0; s < MAX_KITES; s++) {
+      if (!slots[s].assigned) { slot = s; break; }
+    }
+    if (slot < 0) break;  // no more slots
+
+    int ki = pending[p].knownIdx;
+    memcpy(slots[slot].targetMAC, pending[p].mac, 6);
+    slots[slot].assigned = true;
+    slots[slot].knownKiteIdx = ki;
+    newlyAssigned++;
+
+    if (!esp_now_is_peer_exist(slots[slot].targetMAC)) {
+      esp_now_peer_info_t peer = {};
+      memcpy(peer.peer_addr, slots[slot].targetMAC, 6);
+      peer.channel = 0;
+      peer.encrypt = false;
+      esp_now_add_peer(&peer);
+    }
+    Serial.printf("[FLEET] Joystick %d \u2192 %s  %02X:%02X:%02X:%02X:%02X:%02X%s\n",
+                  slot + 1, KNOWN_KITES[ki].name,
+                  slots[slot].targetMAC[0], slots[slot].targetMAC[1],
+                  slots[slot].targetMAC[2], slots[slot].targetMAC[3],
+                  slots[slot].targetMAC[4], slots[slot].targetMAC[5],
+                  pending[p].isHost ? " (host)" : "");
   }
   return newlyAssigned;
 }
@@ -196,6 +243,7 @@ void setup() {
 
     memset(slots[i].targetMAC, 0, 6);
     slots[i].assigned = false;
+    slots[i].knownKiteIdx = -1;
     slots[i].lastCommandSent = 0;
     slots[i].lastActiveTime = 0;
     slots[i].lastButtonChangeTime = 0;
@@ -287,7 +335,8 @@ void loop() {
     if (shouldSend && (now - s.lastCommandSent >= COMMAND_INTERVAL)) {
       s.lastCommandSent = now;
       sendMotorCommand(s.targetMAC, cmd, current_switch);
-      Serial.printf("J%d→%-6s TX:%+5d btn:%d\n", i + 1, i < NUM_KNOWN_KITES ? KNOWN_KITES[i].name : "?", cmd, current_switch);
+      int _ki = s.knownKiteIdx;
+      Serial.printf("J%d→%-6s TX:%+5d btn:%d\n", i + 1, (_ki >= 0 && _ki < NUM_KNOWN_KITES) ? KNOWN_KITES[_ki].name : "?", cmd, current_switch);
     }
   }
 
@@ -322,11 +371,14 @@ void loop() {
       // Color = dim version of the hbBlip-th connected kite's color
       uint8_t hr = 8, hg = 8, hb = 8;  // default: dim white
       int cnt = 0;
-      for (int i = 0; i < NUM_KNOWN_KITES; i++) {
+      for (int i = 0; i < MAX_KITES; i++) {
         if (slots[i].assigned && ++cnt == hbBlip) {
-          hr = KNOWN_KITES[i].r / 20;
-          hg = KNOWN_KITES[i].g / 20;
-          hb = KNOWN_KITES[i].b / 20;
+          int ki = slots[i].knownKiteIdx;
+          if (ki >= 0 && ki < NUM_KNOWN_KITES) {
+            hr = KNOWN_KITES[ki].r / 20;
+            hg = KNOWN_KITES[ki].g / 20;
+            hb = KNOWN_KITES[ki].b / 20;
+          }
           if (hr == 0 && hg == 0 && hb == 0) { hr = hg = hb = 8; }  // fallback white
           break;
         }
@@ -358,7 +410,8 @@ void loop() {
       Serial.printf("[STATUS] %d/%d kite(s) connected", conn, NUM_KNOWN_KITES);
       for (int i = 0; i < NUM_KNOWN_KITES; i++) {
         if (slots[i].assigned) {
-          Serial.printf("  J%d→%s", i + 1, KNOWN_KITES[i].name);
+          int ki = slots[i].knownKiteIdx;
+          Serial.printf("  J%d→%s", i + 1, (ki >= 0 && ki < NUM_KNOWN_KITES) ? KNOWN_KITES[ki].name : "?");
         } else {
           Serial.printf("  J%d→(none)", i + 1);
         }
