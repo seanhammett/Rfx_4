@@ -10,8 +10,14 @@
 #include "fleet_protocol.h"
 
 // =================== JOYSTICK CONFIGURATION ===================
-// All 4 joysticks — pins and calibrated deadbands.
-// Joystick index 0-3 maps to kite_id 1-4.
+// Number of joysticks physically present on this controller (1..MAX_KITES).
+// Joystick index 0..NUM_JOYSTICKS-1 maps to kite_id 1..NUM_JOYSTICKS.
+#define NUM_JOYSTICKS 3
+static_assert(NUM_JOYSTICKS >= 1 && NUM_JOYSTICKS <= MAX_KITES,
+              "NUM_JOYSTICKS must be between 1 and MAX_KITES");
+
+// Pins and calibrated deadbands. The table keeps all MAX_KITES entries;
+// only the first NUM_JOYSTICKS are used.
 struct JoystickConfig {
   uint8_t x_pin, y_pin, sw_pin;
   int dz_y_lower, dz_y_upper, dz_x_lower, dz_x_upper;
@@ -39,7 +45,7 @@ struct JoystickSlot {
   bool prevButton;
 };
 
-JoystickSlot slots[MAX_KITES];   // index 0 = joystick 1 → kite_id 1, etc.
+JoystickSlot slots[NUM_JOYSTICKS];   // index 0 = joystick 1 → kite_id 1, etc.
 
 // =================== FLEET STATE ====================
 bool fleetDiscovered = false;
@@ -61,7 +67,12 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // Receive callback — handles fleet roster responses from host
+// (Arduino core 3.x changed the ESP-NOW receive callback signature)
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+void onDataReceived(const esp_now_recv_info_t *info, const uint8_t *data, int data_len) {
+#else
 void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+#endif
   if (data_len == 0) return;
   uint8_t msg_type = data[0];
   if (msg_type == MSG_FLEET_ROSTER && data_len >= sizeof(FleetRosterMsg) && !rosterReceived) {
@@ -131,7 +142,7 @@ int doFleetDiscovery(int attempts, unsigned long timeout_ms) {
 
   // Assign each unassigned slot to its matching kite_id
   int newlyAssigned = 0;
-  for (int j = 0; j < MAX_KITES; j++) {
+  for (int j = 0; j < NUM_JOYSTICKS; j++) {
     if (slots[j].assigned) continue;
     uint8_t target_id = j + 1;
     for (uint8_t k = 0; k < knownFleetSize; k++) {
@@ -166,8 +177,9 @@ void setup() {
   Serial.println("\n=== Remote Control Startup (Multi-Kite) ===");
   neopixelWrite(2, 0, 0, 0);
   
-  // Initialize all 4 joysticks
-  for (int i = 0; i < MAX_KITES; i++) {
+  // Initialize all joysticks
+  Serial.printf("Joysticks configured: %d\n", NUM_JOYSTICKS);
+  for (int i = 0; i < NUM_JOYSTICKS; i++) {
     const JoystickConfig& cfg = JS_CONFIG[i];
     analogSetPinAttenuation(cfg.x_pin, ADC_11db);
     analogSetPinAttenuation(cfg.y_pin, ADC_11db);
@@ -241,7 +253,7 @@ void loop() {
   unsigned long now = millis();
 
   // Update and send for each joystick (only slots with a connected kite)
-  for (int i = 0; i < MAX_KITES; i++) {
+  for (int i = 0; i < NUM_JOYSTICKS; i++) {
     JoystickSlot& s = slots[i];
     if (!s.assigned) continue;
     JoystickController& js = *s.controller;
@@ -278,7 +290,7 @@ void loop() {
 
   // LED: reflect dominant joystick command — brightness = speed, colour = direction
   int dominantCmd = 0;
-  for (int i = 0; i < MAX_KITES; i++) {
+  for (int i = 0; i < NUM_JOYSTICKS; i++) {
     if (!slots[i].assigned || !slots[i].controller) continue;
     int c = slots[i].controller->getMotorCommand();
     if (abs(c) > abs(dominantCmd)) dominantCmd = c;
@@ -295,7 +307,7 @@ void loop() {
     static bool hbOn   = false;
     static unsigned long hbTime = 0;
     int connectedKites = 0;
-    for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) connectedKites++;
+    for (int i = 0; i < NUM_JOYSTICKS; i++) if (slots[i].assigned) connectedKites++;
 
     if (connectedKites == 0) {
       neopixelWrite(2, 0, 0, 0);                           // No fleet — stay off
@@ -320,16 +332,16 @@ void loop() {
   static unsigned long lastDiscoveryTime = 0;
   {
     bool anyUnassigned = false;
-    for (int i = 0; i < MAX_KITES; i++) if (!slots[i].assigned) { anyUnassigned = true; break; }
+    for (int i = 0; i < NUM_JOYSTICKS; i++) if (!slots[i].assigned) { anyUnassigned = true; break; }
     unsigned long interval = anyUnassigned ? 10000UL : 30000UL;
     if (now - lastDiscoveryTime >= interval) {
       lastDiscoveryTime = now;
       int found = doFleetDiscovery(1, 800);  // Quick single attempt
       // Print connection status
       int conn = 0;
-      for (int i = 0; i < MAX_KITES; i++) if (slots[i].assigned) conn++;
-      Serial.printf("[STATUS] %d/%d kite(s) connected", conn, MAX_KITES);
-      for (int i = 0; i < MAX_KITES; i++) {
+      for (int i = 0; i < NUM_JOYSTICKS; i++) if (slots[i].assigned) conn++;
+      Serial.printf("[STATUS] %d/%d kite(s) connected", conn, NUM_JOYSTICKS);
+      for (int i = 0; i < NUM_JOYSTICKS; i++) {
         if (slots[i].assigned) {
           Serial.printf("  J%d→K%d(%02X:%02X:%02X:%02X:%02X:%02X)",
                         i + 1, i + 1,

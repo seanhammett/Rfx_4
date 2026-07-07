@@ -1,5 +1,5 @@
 // Remote Control Joystick Calibration
-// Reads all four joysticks (X and Y) for 10 seconds and reports
+// Reads all configured joysticks (X and Y) for 10 seconds and reports
 // the average "zero" center value for each axis.
 // LED: 5 rapid red blinks, then solid white during data gathering.
 
@@ -8,6 +8,12 @@
 // Set to true if remote_control.cpp uses setInvert(true, true)
 // so that the reported deadband values are in the same (inverted) space.
 #define INVERT_AXES  true
+
+// Number of joysticks physically present on this controller (1..4).
+// Keep in sync with NUM_JOYSTICKS in remote_control.cpp.
+#define NUM_JOYSTICKS 3
+static_assert(NUM_JOYSTICKS >= 1 && NUM_JOYSTICKS <= 4,
+              "NUM_JOYSTICKS must be between 1 and 4");
 
 // =================== JOYSTICK PINS ===================
 // Joystick 1 (option 1)
@@ -23,6 +29,8 @@
 #define JOY4_X_PIN  13
 #define JOY4_Y_PIN  11
 
+// Full pin/label tables for all 4 possible joysticks;
+// only the first NUM_JOYSTICKS are read.
 static const uint8_t JOY_PINS[] = {
   JOY1_X_PIN, JOY1_Y_PIN,
   JOY2_X_PIN, JOY2_Y_PIN,
@@ -35,7 +43,7 @@ static const char* JOY_LABELS[] = {
   "Joy3_X", "Joy3_Y",
   "Joy4_X", "Joy4_Y"
 };
-static const int NUM_AXES = 8;
+static const int NUM_AXES = NUM_JOYSTICKS * 2;
 
 static const unsigned long GATHER_DURATION_MS = 10000;
 
@@ -80,8 +88,14 @@ void setup() {
   }
   sampleCount = 1;
 
-  Serial.println("J1_X  J1_Y  J2_X  J2_Y  J3_X  J3_Y  J4_X  J4_Y   t(s)");
-  Serial.println("----  ----  ----  ----  ----  ----  ----  ----   ----");
+  for (int j = 0; j < NUM_JOYSTICKS; j++) {
+    Serial.printf("J%d_X  J%d_Y  ", j + 1, j + 1);
+  }
+  Serial.println(" t(s)");
+  for (int i = 0; i < NUM_AXES; i++) {
+    Serial.print("----  ");
+  }
+  Serial.println(" ----");
 
   unsigned long startTime = millis();
   unsigned long lastPrint = startTime;
@@ -128,7 +142,7 @@ void setup() {
   Serial.println("\n--- Suggested Deadband (with 15%% margin) ---");
   Serial.println("Joystick   X_lower  X_upper  Y_lower  Y_upper   setDeadzone() call");
   Serial.println("---------- -------- -------- -------- --------  --------------------");
-  for (int j = 0; j < 4; j++) {
+  for (int j = 0; j < NUM_JOYSTICKS; j++) {
     int xi = j * 2;      // X axis index
     int yi = j * 2 + 1;  // Y axis index
 
