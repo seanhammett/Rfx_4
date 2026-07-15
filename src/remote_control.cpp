@@ -24,9 +24,9 @@ struct JoystickConfig {
 };
 
 static const JoystickConfig JS_CONFIG[MAX_KITES] = {
-  {  6,  7, 39,  2068, 2156, 2051, 2144 },  // Joystick 1 → Kite 1
-  {  4,  5, 40,  2037, 2136, 2066, 2157 },  // Joystick 2 → Kite 2
-  { 12, 10, 41,  2087, 2176, 2044, 2119 },  // Joystick 3 → Kite 3
+  {  6,  7, 39,  2042, 2123, 2070, 2150 },  // Joystick 1 → Kite 1
+  {  4,  5, 40,  2040, 2123, 2023, 2104 },  // Joystick 2 → Kite 2
+  { 12, 10, 41,  2040, 2120, 2038, 2109 },  // Joystick 3 → Kite 3
   { 13, 11, 42,  2087, 2166, 2036, 2115 },  // Joystick 4 → Kite 4
 };
 
