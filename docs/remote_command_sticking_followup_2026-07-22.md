@@ -269,9 +269,4 @@ the tuning section.
 - **Approach 3** is the fallback if the unicast model is preferred over broadcast.
 - Add **Approach 7** first if you want loss numbers to guide the rest.
 
----
 
-## Other suggestions
-_(space reserved for Sean's additional ideas)_
-
-- …

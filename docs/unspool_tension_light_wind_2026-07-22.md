@@ -189,8 +189,4 @@ wind/tension conditions we validated in._
 |---|---|---|---|---|
 | | | | | |
 
----
 
-## Other suggestions
-
-_Space reserved for Sean's additional ideas._
