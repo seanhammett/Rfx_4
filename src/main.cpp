@@ -320,7 +320,10 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
 
   switch (msg_type) {
     case MSG_CONTROL:
-      if (data_len >= sizeof(FleetControlMsg) && !newRemoteCommand) {
+      // Latest-wins: always take the freshest stick state. Dropping a newer
+      // packet because an older one is unconsumed can discard the release-zero
+      // that returns the motor to neutral (see processRemoteCommands / motion loop).
+      if (data_len >= sizeof(FleetControlMsg)) {
         const FleetControlMsg* msg = (const FleetControlMsg*)data;
         remoteControlMsg.motor_speed = msg->motor_speed;
         remoteControlMsg.command = msg->command;
@@ -1141,8 +1144,16 @@ void loop() {
     } else if (remoteActive && remoteControlMsg.command == 0) {
       // Remote input is active - process joystick (already done above, just continue with this velocity)
       // Do nothing here - velocity already set by processJoystickInput()
+    } else {
+      // Fail-safe: neither autopilot nor an active remote link is driving the
+      // motor (remote silent for >REMOTE_TIMEOUT_MS, or a stop command). Hold the
+      // spool stationary instead of latching the last velocity — otherwise a
+      // lost release-zero would leave the motor running the last command forever.
+      // Velocity 0 (not SetStop) keeps position under line tension; SetStop would
+      // drop torque and let the line pay out.
+      commanded_velocity = 0.0;
+      target_velocity_current = 0.0;
     }
-    // Otherwise: keep last commanded_velocity (don't zero it out!)
     
     // Update detectors (always run regardless of autopilot state)
     if (motorResponseReceived) {
