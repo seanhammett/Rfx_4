@@ -12,6 +12,7 @@
 #define HOST_TIMEOUT_MS         6000   // ms without announce before re-election
 #define DISCOVER_TIMEOUT_MS     3000   // ms remote waits for roster reply
 #define DISCOVER_RETRIES        2      // number of retry attempts for remote discovery
+#define REMOTE_EVENT_REPEAT_MS  120    // remote resends a one-shot control event this long (drop tolerance)
 
 // Kite display colours (indexed by kite_id 1-4)
 static const char* KITE_COLORS[] = { "#ffffff", "#ff4444", "#ffa807", "#44bb44", "#4488ff" };
@@ -33,6 +34,19 @@ typedef struct __attribute__((packed)) {
   uint32_t ip_addr;      // IPv4 address (network byte order)
 } KiteSlot;
 
+// ===== Control Events (remote → kite) =====
+// The remote parses raw switch input into semantic, one-shot actions and sends
+// the resolved event — the kite no longer does click detection itself. Events are
+// edge-triggered, so the remote repeats each one for a short window (see
+// REMOTE_EVENT_REPEAT_MS) and stamps a rolling event_seq; the kite acts once per
+// new seq and ignores repeats. (Level-triggered "held" states will use a separate
+// flags field when group-fly lands — see docs/joint_flight_features_2026-07-22.md.)
+enum FleetControlEvent : uint8_t {
+  EVENT_NONE               = 0,  // no pending action
+  EVENT_TOGGLE_TARGET_SEEK = 1,  // was: single-click
+  EVENT_TOGGLE_RESPOOL     = 2,  // was: triple-click
+};
+
 // ===== Control Message (remote → kite) =====
 // Prefixed with msg_type so kites can distinguish fleet vs control packets.
 // For backward compat: old 4-byte ControlMessage (no prefix) is detected by length.
@@ -40,8 +54,9 @@ typedef struct __attribute__((packed)) {
   uint8_t msg_type;      // MSG_CONTROL
   int16_t motor_speed;   // -1000 to +1000
   uint8_t command;       // 0=speed, 1=unused, 2=stop
-  uint8_t button;        // 0=released, 1=pressed
-} FleetControlMsg;       // 5 bytes
+  uint8_t event;         // FleetControlEvent — one-shot semantic action (0 = none)
+  uint8_t event_seq;     // rolling id; kite de-dups so a repeated event fires once
+} FleetControlMsg;       // 6 bytes
 
 // ===== Fleet Announce (host → broadcast) =====
 typedef struct __attribute__((packed)) {

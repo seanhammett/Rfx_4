@@ -43,6 +43,10 @@ struct JoystickSlot {
   unsigned long lastActiveTime;
   unsigned long lastButtonChangeTime;
   bool prevButton;
+  // Semantic control event to this kite (parsed from clicks on the remote).
+  uint8_t pendingEvent;        // FleetControlEvent currently being transmitted (0 = none)
+  uint8_t eventSeq;            // rolling id, bumped each time a new event fires
+  unsigned long eventRepeatUntil;  // resend pendingEvent until this time, then revert to none
 };
 
 JoystickSlot slots[NUM_JOYSTICKS];   // index 0 = joystick 1 → kite_id 1, etc.
@@ -57,7 +61,7 @@ volatile bool rosterReceived = false;
 FleetRosterMsg pendingRoster;
 
 // =================== ESP-NOW DATA STRUCTURE ===================
-FleetControlMsg outgoingMsg;         // 5-byte fleet control message
+FleetControlMsg outgoingMsg;         // 6-byte fleet control message
 
 const unsigned long COMMAND_INTERVAL = 20;  // 50 Hz per joystick
 
@@ -81,11 +85,12 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
   }
 }
 
-void sendMotorCommand(const uint8_t* mac, int speed, bool button_pressed) {
+void sendMotorCommand(const uint8_t* mac, int speed, uint8_t event, uint8_t event_seq) {
   outgoingMsg.msg_type = MSG_CONTROL;
   outgoingMsg.motor_speed = speed;
   outgoingMsg.command = 0;  // Velocity command
-  outgoingMsg.button = button_pressed ? 1 : 0;
+  outgoingMsg.event = event;
+  outgoingMsg.event_seq = event_seq;
   esp_now_send(mac, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
 }
 
@@ -93,7 +98,8 @@ void sendStopCommand(const uint8_t* mac) {
   outgoingMsg.msg_type = MSG_CONTROL;
   outgoingMsg.motor_speed = 0;
   outgoingMsg.command = 2;  // Stop
-  outgoingMsg.button = 0;
+  outgoingMsg.event = EVENT_NONE;
+  outgoingMsg.event_seq = 0;
   esp_now_send(mac, (uint8_t *)&outgoingMsg, sizeof(outgoingMsg));
 }
 
@@ -197,6 +203,9 @@ void setup() {
     slots[i].lastActiveTime = 0;
     slots[i].lastButtonChangeTime = 0;
     slots[i].prevButton = false;
+    slots[i].pendingEvent = EVENT_NONE;
+    slots[i].eventSeq = 0;
+    slots[i].eventRepeatUntil = 0;
 
     Serial.printf("  Joystick %d: X=%d Y=%d SW=%d\n", i + 1, cfg.x_pin, cfg.y_pin, cfg.sw_pin);
   }
@@ -264,6 +273,24 @@ void loop() {
     s.prevButton = current_switch;
     if (button_changed) s.lastButtonChangeTime = now;
 
+    // Parse the switch into a semantic event on the remote (the kite no longer does
+    // click detection). Resolves once, on the cycle the click sequence completes.
+    uint8_t clicks = js.getClickCount();
+    if (clicks == 1) {
+      s.pendingEvent = EVENT_TOGGLE_TARGET_SEEK;
+      s.eventSeq++;
+      s.eventRepeatUntil = now + REMOTE_EVENT_REPEAT_MS;
+    } else if (clicks == 3) {
+      s.pendingEvent = EVENT_TOGGLE_RESPOOL;
+      s.eventSeq++;
+      s.eventRepeatUntil = now + REMOTE_EVENT_REPEAT_MS;
+    }
+    // Retire the event once its resend window closes (seq is left as-is so the kite,
+    // which de-dups on seq, never re-fires it).
+    if (s.pendingEvent != EVENT_NONE && now >= s.eventRepeatUntil) {
+      s.pendingEvent = EVENT_NONE;
+    }
+
     bool shouldSend = false;
     int cmd = 0;
 
@@ -279,12 +306,17 @@ void loop() {
       // Button changed recently — ensure state is transmitted
       cmd = 0;
       shouldSend = true;
+    } else if (s.pendingEvent != EVENT_NONE) {
+      // An event is mid-resend but the stick is idle — keep packets flowing so the
+      // event actually reaches the kite (clicks resolve ~400 ms after the last edge).
+      cmd = 0;
+      shouldSend = true;
     }
 
     if (shouldSend && (now - s.lastCommandSent >= COMMAND_INTERVAL)) {
       s.lastCommandSent = now;
-      sendMotorCommand(s.targetMAC, cmd, current_switch);
-      Serial.printf("J%d→K%d TX:%+5d btn:%d\n", i + 1, i + 1, cmd, current_switch);
+      sendMotorCommand(s.targetMAC, cmd, s.pendingEvent, s.eventSeq);
+      Serial.printf("J%d→K%d TX:%+5d evt:%d seq:%d\n", i + 1, i + 1, cmd, s.pendingEvent, s.eventSeq);
     }
   }
 

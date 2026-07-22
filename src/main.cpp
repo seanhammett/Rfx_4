@@ -66,7 +66,9 @@ AsyncWebServer server(80);
 OTAHandler otaHandler;
 
 // ===== ESP-NOW Remote Control =====
-LegacyControlMsg remoteControlMsg;
+// Holds the latest control state from the remote. The remote now parses clicks into
+// semantic events (msg->event / event_seq); the kite just de-dups and applies them.
+FleetControlMsg remoteControlMsg;
 volatile bool newRemoteCommand = false;     // Flag set in ISR
 unsigned long lastRemoteCommandTime = 0;    // Track when we last received remote command
 
@@ -307,10 +309,15 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
   // ISR context — keep FAST! Copy data and set flags only.
   if (data_len == 0) return;
 
-  // Legacy 4-byte ControlMessage (backward compat with old remotes)
+  // Legacy 4-byte ControlMessage (backward compat with old remotes). These carry no
+  // semantic events — velocity/stop still work, but click-driven modes (target-seek,
+  // respool) require the current remote firmware.
   if (data_len == sizeof(LegacyControlMsg)) {
     if (!newRemoteCommand) {
-      memcpy(&remoteControlMsg, data, sizeof(LegacyControlMsg));
+      const LegacyControlMsg* lm = (const LegacyControlMsg*)data;
+      remoteControlMsg.motor_speed = lm->motor_speed;
+      remoteControlMsg.command = lm->command;
+      remoteControlMsg.event = EVENT_NONE;
       newRemoteCommand = true;
     }
     return;
@@ -324,10 +331,7 @@ void onDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
       // packet because an older one is unconsumed can discard the release-zero
       // that returns the motor to neutral (see processRemoteCommands / motion loop).
       if (data_len >= sizeof(FleetControlMsg)) {
-        const FleetControlMsg* msg = (const FleetControlMsg*)data;
-        remoteControlMsg.motor_speed = msg->motor_speed;
-        remoteControlMsg.command = msg->command;
-        remoteControlMsg.button = msg->button;
+        remoteControlMsg = *(const FleetControlMsg*)data;
         newRemoteCommand = true;
       }
       break;
@@ -835,60 +839,61 @@ void toggleTargetSeeking(const char* source) {
   }
 }
 
+// ===== Respool mode toggle (invoked by the remote's respool event) =====
+void toggleRespoolMode() {
+  respool_mode = !respool_mode;
+  if (!respool_mode && motorResponseReceived) {
+    // Exiting respool: save current motor position as new zero
+    const auto& r = moteus.last_result().values;
+    motor_position_offset = r.position;
+    line_length = 0.0;
+    line_length_target = 0.0;
+    autopilot.setTargetLineLength(0.0);
+    Serial.printf("[OK] New zero set at motor position %.3f rev\n", motor_position_offset);
+  }
+  Serial.printf("%s Respool mode %s (zero-length safety %s)\n",
+                respool_mode ? "[CHARGING]" : "[OK]",
+                respool_mode ? "ENABLED" : "DISABLED",
+                respool_mode ? "BYPASSED" : "active");
+}
+
 // ===== Process incoming ESP-NOW remote commands =====
-// Multi-click state lives outside the function so resolution runs every loop iteration
-static bool prev_remote_button = false;
-static uint8_t remote_click_count = 0;
-static unsigned long remote_last_click_time = 0;
-static const unsigned long REMOTE_MULTI_CLICK_WINDOW = 400;  // ms between clicks
+// The remote parses clicks into semantic events; the kite applies each exactly once.
+// De-dup is by event_seq: the remote repeats an event for a short window (drop
+// tolerance), so we act only when a new, non-NONE seq arrives.
+static uint8_t last_event_seq = 0;
+static bool    have_event_seq = false;
 
 void processRemoteCommands() {
-  // --- Process new ESP-NOW packet (edge detection) ---
-  if (newRemoteCommand) {
-    newRemoteCommand = false;
-    lastRemoteCommandTime = millis();
-    
-    Serial.printf("ESP-NOW RX: cmd=%d speed=%d btn=%d\n",
-                  remoteControlMsg.command, remoteControlMsg.motor_speed, remoteControlMsg.button);
-    
-    bool current_remote_button = (remoteControlMsg.button != 0);
-    // Detect rising edge (button just pressed)
-    if (current_remote_button && !prev_remote_button) {
-      remote_click_count++;
-      remote_last_click_time = millis();
-    }
-    prev_remote_button = current_remote_button;
-    
-    // Handle stop command
-    if (remoteControlMsg.command == 2) {
-      Serial.println("Remote STOP command");
-      moteus.SetStop();
-    }
+  if (!newRemoteCommand) return;
+  newRemoteCommand = false;
+  lastRemoteCommandTime = millis();
+
+  Serial.printf("ESP-NOW RX: cmd=%d speed=%d evt=%d seq=%d\n",
+                remoteControlMsg.command, remoteControlMsg.motor_speed,
+                remoteControlMsg.event, remoteControlMsg.event_seq);
+
+  // Handle stop command
+  if (remoteControlMsg.command == 2) {
+    Serial.println("Remote STOP command");
+    moteus.SetStop();
   }
 
-  // --- Resolve click sequence (runs every loop, not gated on new packet) ---
-  if (remote_click_count > 0 && !prev_remote_button &&
-      (millis() - remote_last_click_time > REMOTE_MULTI_CLICK_WINDOW)) {
-    uint8_t clicks = min((uint8_t)3, remote_click_count);
-    remote_click_count = 0;
-
-    if (clicks == 1) {
-      toggleTargetSeeking("REMOTE");
-    } else if (clicks == 3) {
-      respool_mode = !respool_mode;
-      if (!respool_mode && motorResponseReceived) {
-        // Exiting respool: save current motor position as new zero
-        const auto& r = moteus.last_result().values;
-        motor_position_offset = r.position;
-        line_length = 0.0;
-        line_length_target = 0.0;
-        autopilot.setTargetLineLength(0.0);
-        Serial.printf("[OK] New zero set at motor position %.3f rev\n", motor_position_offset);
-      }
-      Serial.printf("%s Respool mode %s (zero-length safety %s)\n",
-                    respool_mode ? "[CHARGING]" : "[OK]",
-                    respool_mode ? "ENABLED" : "DISABLED",
-                    respool_mode ? "BYPASSED" : "active");
+  // Apply a semantic event once per new sequence id
+  uint8_t evt = remoteControlMsg.event;
+  uint8_t seq = remoteControlMsg.event_seq;
+  if (evt != EVENT_NONE && (!have_event_seq || seq != last_event_seq)) {
+    last_event_seq = seq;
+    have_event_seq = true;
+    switch (evt) {
+      case EVENT_TOGGLE_TARGET_SEEK:
+        toggleTargetSeeking("REMOTE");
+        break;
+      case EVENT_TOGGLE_RESPOOL:
+        toggleRespoolMode();
+        break;
+      default:
+        break;
     }
   }
 }
