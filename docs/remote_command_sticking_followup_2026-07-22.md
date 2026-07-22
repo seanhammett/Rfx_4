@@ -25,7 +25,7 @@ Two compounding issues:
 2. **Fragile neutral signalling (trigger).** The remote only emits release-zeros
    for a short (~350 ms) window after release, then goes silent. If that burst was
    lost — far more likely with three concurrent 50 Hz streams — the last value the
-   kite latched stayed non-zero, and issue (1) held it forever. The kite's ISW
+   kite latched stayed non-zero, and issue (1) held it forever. The kite's ISR
    dispatcher made this worse by **dropping the newest control packet** whenever the
    previous one was unconsumed (`&& !newRemoteCommand`), so the meaningful
    release-zero could be the one discarded.
@@ -141,7 +141,137 @@ if (!shouldSend && s.assigned && (now - s.lastCommandSent >= NEUTRAL_HEARTBEAT_M
 - Consider measuring/logging actual ESP-NOW loss per kite to drive the above
   numbers rather than guessing.
 
-### Other suggestions
-_(to be appended)_
+---
+
+## ESP-NOW architecture — reducing traffic & improving resilience
+
+> **Status: analysis only — nothing here is implemented.** Deferred until hardware
+> is set up to test. Captured so the design thinking isn't lost.
+
+### Was the sticking actually caused by "too much traffic"? No — not bandwidth.
+
+The raw volume is tiny. The remote sends a 5-byte control message per assigned kite
+at 50 Hz — worst case 3 kites × 50 Hz = **150 packets/sec of ~5-byte payloads**.
+ESP-NOW handles thousands of small frames/sec, so the link was nowhere near
+saturated. Individual packets were being **lost**, and three things made that likely:
+
+1. **Fire-and-forget delivery.** Unicast ESP-NOW does a MAC-level ACK + a few
+   retries, but if it ultimately fails the app never knows — `onDataSent` is empty
+   (`src/remote_control.cpp`). Nothing re-sends a lost packet.
+2. **Shared radio + channel with WiFi.** Each kite runs WiFi STA (hotspot) *plus*
+   the web dashboard, SPIFFS page serving, and Supabase flight-log uploads — all on
+   the same radio/channel as ESP-NOW. That contention (not the control stream) is
+   the dominant loss source. The `watchdog_timeout = 0.5` comment in
+   `sendMotorCommand()` ("survives SPIFFS reads during page refresh") is direct
+   evidence this was already biting.
+3. **The receive-side drop guard** (`!newRemoteCommand`) — already removed in
+   Option C.
+
+Three kites amplified all of this (more concurrent streams *and* three dashboards'
+worth of WiFi traffic), which is why it surfaced with the fleet, not with one kite.
+
+**So the real levers are link reliability under contention and retransmit
+awareness, not throughput.** Note that Option A (committed) already makes the system
+*safe* regardless of loss; everything below only reduces how often the glitch
+happens and hardens the link. **None of these approaches cost command rate or
+resolution** — that constraint was explicit.
+
+### Key insight the design should exploit
+
+Control messages are **absolute and idempotent**: `motor_speed` is the full current
+stick position, not a delta. Therefore **you never need every packet to arrive, only
+for a recent one to arrive.** The entire bug was that the *last* packet before going
+idle could be lost with nothing after it. Two design changes lean on this property.
+
+### Approach 1 — Never go fully silent (heartbeat current state)
+
+Same mechanism as Approach B above, but the framing is the point: because commands
+are idempotent, a steady low-rate keepalive of the *current* stick state (including
+neutral) means arbitrary loss self-heals within one heartbeat interval. Keep full
+50 Hz while the stick moves (zero latency cost); never stop emitting the current
+value while assigned (~10 Hz idle). **Top resilience win. No speed/resolution cost.**
+
+### Approach 2 — One broadcast "fleet frame" instead of N unicast streams
+
+Instead of the remote sending N separate unicast packets per cycle, send **one
+broadcast frame carrying an array of per-kite commands**; each kite reads its own
+slot. This is the change that actually *reduces traffic*:
+
+- **~N× fewer transmissions** (1 frame/cycle instead of N) and it removes the
+  per-unicast MAC ACK/retry airtime → less airtime → less contention → less loss
+  for everyone.
+- **Idle kites get their heartbeat for free** — as long as any joystick is active,
+  the frame already carries every kite's current (neutral) value.
+- **Same rate, same int16 resolution per kite** — nothing sacrificed.
+- **Trade-off:** broadcast has no MAC-level ACK/retry, so per-packet reliability is
+  lower — which the idempotent-stream + heartbeat design makes irrelevant.
+
+Sketch frame layout (well under the 250-byte ESP-NOW limit):
+
+```cpp
+typedef struct __attribute__((packed)) {
+  uint8_t  msg_type;      // e.g. MSG_FLEET_CONTROL
+  uint8_t  seq;           // rolling counter (see Approach 7)
+  uint8_t  count;         // number of valid slots
+  struct {
+    int16_t motor_speed;  // -1000..1000, absolute (full resolution preserved)
+    uint8_t command;      // 0=speed, 2=stop
+    uint8_t button;       // 0/1
+  } slot[MAX_KITES];      // slot[i] → kite_id i+1
+} FleetControlFrame;      // broadcast, ~3 + 4*MAX_KITES bytes
+```
+
+Remote sends it to the broadcast MAC each cycle; each kite indexes `slot[myKiteId-1]`.
+Reception needs no per-sender peer entry — the recv callback fires for broadcast
+frames on the shared channel. If you'd rather keep unicast, use Approach 3 instead.
+
+### Approach 3 — Send-status callback + targeted fast-retransmit (unicast alternative)
+
+If staying unicast, wire up `onDataSent`: when a send reports failure, immediately
+re-send that kite's packet once or twice. Adds reliability *only when a packet
+actually drops*, with no steady-traffic cost. The reactive complement to Approach 1.
+
+### Approach 4 — Throttle the kite's WiFi work during active manual control
+
+The dashboard telemetry, SPIFFS serving, and Supabase uploads compete with the
+control link on the same radio. Reducing their push rate (or deferring uploads)
+while `isRemoteActive()` is true directly cuts the contention that causes the drops.
+**Biggest environmental win; attacks the actual loss source.** No control-path cost.
+
+### Approach 5 — Lock the ESP-NOW channel deterministically
+
+Today the channel is whatever the iPhone hotspot assigns; if WiFi reconnects on a
+different channel, ESP-NOW silently breaks. Pinning it (`esp_wifi_set_channel`) and
+verifying all nodes match removes a class of "suddenly unresponsive" failures.
+Constraint: with WiFi STA active, ESP-NOW must use the STA's current channel — so
+this pairs with a known/fixed AP channel, or a decision about WiFi-vs-ESP-NOW
+priority during flight.
+
+### Approach 6 — Bump TX power
+
+`esp_wifi_set_max_tx_power(...)` — a cheap link-margin improvement if range/signal
+is ever marginal. Low effort, no downside for a short-range remote.
+
+### Approach 7 — Add a sequence counter for loss measurement
+
+A 1-byte rolling `seq` per control frame doesn't change traffic, but lets each kite
+*measure* actual loss (gaps in seq). Turns heartbeat-rate / channel decisions into
+data-driven tuning instead of guesswork. Complements the "log ESP-NOW loss" note in
+the tuning section.
+
+### Recommended combination (when ready to test)
+
+- Highest impact / least change: **Approach 1 (heartbeat) + Approach 2 (broadcast
+  fleet frame)** — fewer packets, self-healing loss, zero latency/resolution cost,
+  and #2 folds the heartbeat in almost for free.
+- Pair with **Approach 4 (throttle kite WiFi during active control)** to attack the
+  root contention.
+- **Approach 3** is the fallback if the unicast model is preferred over broadcast.
+- Add **Approach 7** first if you want loss numbers to guide the rest.
+
+---
+
+## Other suggestions
+_(space reserved for Sean's additional ideas)_
 
 - …
